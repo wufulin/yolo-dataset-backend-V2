@@ -1,4 +1,4 @@
-"""项目的类型定义和协议 - 提供完整的类型支持"""
+"""Type aliases and protocols used throughout the project."""
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
@@ -19,25 +19,25 @@ from typing import (
     runtime_checkable,
 )
 
-# 基础类型定义
+# Base type aliases
 ModelType = TypeVar('ModelType')
 CreateSchemaType = TypeVar('CreateSchemaType')
 UpdateSchemaType = TypeVar('UpdateSchemaType')
 ResponseType = TypeVar('ResponseType')
 
-# 数据集相关类型
+# Dataset-related literals
 YOLODatasetType = Literal['detect', 'segment', 'pose', 'obb', 'classify']
 
 DatasetStatus = Literal['active', 'processing', 'validating', 'error', 'deleted']
 
 ImageFormat = Literal['JPEG', 'JPG', 'PNG', 'BMP', 'TIFF', 'WEBP']
 
-# 文件处理类型
+# File handling literals
 FileType = Literal['image', 'annotation', 'config', 'archive']
 
-# API响应类型
+# API response types
 class APIResponse(TypedDict):
-    """标准API响应格式"""
+    """Standard API response envelope."""
     success: bool
     message: str
     data: Optional[Any]
@@ -45,7 +45,7 @@ class APIResponse(TypedDict):
     request_id: Optional[str]
 
 class PaginationResponse(TypedDict, Generic[ResponseType]):
-    """分页响应格式"""
+    """Paginated API response envelope."""
     items: List[ResponseType]
     page: int
     page_size: int
@@ -55,28 +55,28 @@ class PaginationResponse(TypedDict, Generic[ResponseType]):
     has_prev: bool
 
 class SuccessResponse(TypedDict, Generic[ResponseType]):
-    """成功响应格式"""
+    """Success response payload."""
     success: Literal[True]
     data: ResponseType
     message: str
 
 class ErrorResponse(TypedDict):
-    """错误响应格式"""
+    """Error response payload."""
     success: Literal[False]
     error_code: str
     message: str
     details: Optional[Dict[str, Any]]
 
 class ValidationErrorResponse(TypedDict):
-    """验证错误响应格式"""
+    """Validation error payload."""
     success: Literal[False]
     error_code: Literal['VALIDATION_ERROR']
     message: str
     field_errors: Dict[str, List[str]]
 
-# 数据库模型类型
+# Database model configuration types
 class MongoDBConfig(TypedDict):
-    """MongoDB配置"""
+    """MongoDB configuration snapshot."""
     url: str
     db_name: str
     max_pool_size: int
@@ -84,7 +84,7 @@ class MongoDBConfig(TypedDict):
     retry_writes: bool
 
 class StorageConfig(TypedDict):
-    """存储配置"""
+    """Object storage configuration snapshot."""
     endpoint: str
     access_key: str
     secret_key: str
@@ -92,16 +92,16 @@ class StorageConfig(TypedDict):
     secure: bool
 
 class CacheConfig(TypedDict):
-    """缓存配置"""
+    """Cache/Redis configuration snapshot."""
     host: str
     port: int
     db: int
     password: Optional[str]
     max_connections: int
 
-# 文件处理类型
+# File processing types
 class FileInfo(TypedDict):
-    """文件信息"""
+    """Describes a file stored on disk."""
     path: str
     name: str
     size: int
@@ -111,7 +111,7 @@ class FileInfo(TypedDict):
     modified_at: datetime
 
 class FileValidationResult(TypedDict):
-    """文件验证结果"""
+    """Result of validating a file."""
     is_valid: bool
     file_type: FileType
     format: Optional[str]
@@ -120,7 +120,7 @@ class FileValidationResult(TypedDict):
     metadata: Optional[Dict[str, Any]]
 
 class UploadProgress(TypedDict):
-    """上传进度"""
+    """Upload progress metadata."""
     session_id: str
     filename: str
     file_size: int
@@ -129,9 +129,9 @@ class UploadProgress(TypedDict):
     speed_mbps: float
     eta_seconds: Optional[float]
 
-# YOLO相关类型
+# YOLO-related types
 class YOLOAnnotation(TypedDict):
-    """YOLO标注格式"""
+    """Normalized YOLO annotation entry."""
     class_id: int
     x_center: float
     y_center: float
@@ -140,7 +140,7 @@ class YOLOAnnotation(TypedDict):
     confidence: Optional[float]
 
 class YOLODatasetConfig(TypedDict):
-    """YOLO数据集配置"""
+    """YOLO dataset configuration file."""
     train: str
     val: str
     test: Optional[str]
@@ -148,23 +148,23 @@ class YOLODatasetConfig(TypedDict):
     names: List[str]
 
 class DatasetValidationResult(TypedDict):
-    """数据集验证结果"""
+    """Dataset validation result details."""
     is_valid: bool
     errors: List[str]
     warnings: List[str]
     stats: Optional[Dict[str, Any]]
 
 class YOLODatasetStats(TypedDict):
-    """数据集统计信息"""
+    """Dataset statistics summary."""
     total_images: int
     total_annotations: int
     class_distribution: Dict[str, int]
     image_sizes: Dict[str, int]
     avg_objects_per_image: float
 
-# 事件系统类型
+# Event system types
 class EventData(TypedDict):
-    """事件数据"""
+    """Payload delivered to event handlers."""
     event_type: str
     event_id: str
     timestamp: datetime
@@ -172,44 +172,44 @@ class EventData(TypedDict):
     data: Dict[str, Any]
 
 class EventHandler(Protocol):
-    """事件处理器协议"""
+    """Protocol for async event handlers."""
     def handle(self, event: EventData) -> Awaitable[None]:
-        """处理事件"""
+        """Handle an incoming event."""
         ...
 
 class EventPublisher(Protocol):
-    """事件发布器协议"""
+    """Protocol for event publishing components."""
     async def publish(self, event: EventData) -> None:
-        """发布事件"""
+        """Publish a single event."""
         ...
 
     async def subscribe(self, event_type: str, handler: EventHandler) -> None:
-        """订阅事件"""
+        """Subscribe a handler to an event type."""
         ...
 
     async def unsubscribe(self, event_type: str, handler: EventHandler) -> None:
-        """取消订阅"""
+        """Remove subscription for an event type."""
         ...
 
-# 监控和指标类型
+# Monitoring and metrics types
 class MetricData(TypedDict):
-    """指标数据"""
+    """Generic metric datapoint."""
     name: str
     value: float
     timestamp: datetime
     tags: Optional[Dict[str, str]]
 
 class HealthCheckResult(TypedDict):
-    """健康检查结果"""
+    """Health-check structure describing service status."""
     status: Literal['healthy', 'unhealthy', 'degraded']
     service: str
     timestamp: datetime
     details: Optional[Dict[str, Any]]
     dependencies: Optional[Dict[str, str]]
 
-# 配置管理类型
+# Configuration management types
 class ConfigurationSchema(TypedDict):
-    """配置模式"""
+    """Schema definition for configurable items."""
     key: str
     type: str
     required: bool
@@ -218,14 +218,14 @@ class ConfigurationSchema(TypedDict):
     validation_rules: Optional[Dict[str, Any]]
 
 class ConfigurationGroup(TypedDict):
-    """配置组"""
+    """Grouping of related configuration entries."""
     name: str
     description: str
     configs: List[ConfigurationSchema]
 
-# 用户和权限类型
+# User and permission types
 class UserInfo(TypedDict):
-    """用户信息"""
+    """User profile snapshot."""
     user_id: str
     username: str
     email: Optional[str]
@@ -235,14 +235,14 @@ class UserInfo(TypedDict):
     last_login: Optional[datetime]
 
 class Permission(TypedDict):
-    """权限定义"""
+    """Permission definition."""
     resource: str
     action: str
     scope: Optional[str]
 
-# 批处理任务类型
+# Batch processing types
 class BatchJob(TypedDict):
-    """批处理任务"""
+    """Batch-processing job metadata."""
     job_id: str
     job_type: str
     status: Literal['pending', 'running', 'completed', 'failed']
@@ -256,22 +256,22 @@ class BatchJob(TypedDict):
     result: Optional[Dict[str, Any]]
 
 class BatchJobHandler(Protocol):
-    """批处理任务处理器协议"""
+    """Protocol for batch job handlers."""
     def prepare_job(self, job: BatchJob) -> Awaitable[None]:
-        """准备任务"""
+        """Prepare a job before execution."""
         ...
 
     def execute_step(self, step: int, job: BatchJob) -> Awaitable[Dict[str, Any]]:
-        """执行步骤"""
+        """Execute one step of the job."""
         ...
 
     def cleanup_job(self, job: BatchJob, success: bool) -> Awaitable[None]:
-        """清理任务"""
+        """Clean up resources after job completion."""
         ...
 
-# 缓存相关类型
+# Cache-related types
 class CacheEntry(TypedDict):
-    """缓存条目"""
+    """Metadata for cached entries."""
     key: str
     value: Any
     ttl: Optional[int]
@@ -280,30 +280,30 @@ class CacheEntry(TypedDict):
     last_accessed: datetime
 
 class CacheStrategy(Protocol):
-    """缓存策略协议"""
+    """Protocol describing cache strategy hooks."""
     def get(self, key: str) -> Optional[Any]:
-        """获取缓存值"""
+        """Fetch a cached value."""
         ...
 
     def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
-        """设置缓存值"""
+        """Store a cached value."""
         ...
 
     def delete(self, key: str) -> bool:
-        """删除缓存值"""
+        """Remove a cached value."""
         ...
 
     def clear(self) -> bool:
-        """清空缓存"""
+        """Clear all cache entries."""
         ...
 
     def exists(self, key: str) -> bool:
-        """检查键是否存在"""
+        """Return whether the key exists."""
         ...
 
-# 搜索相关类型
+# Search-related types
 class SearchQuery(TypedDict):
-    """搜索查询"""
+    """Represents a user search query."""
     query: str
     filters: Optional[Dict[str, Any]]
     sort: Optional[Dict[str, Literal['asc', 'desc']]]
@@ -311,7 +311,7 @@ class SearchQuery(TypedDict):
     page_size: int
 
 class SearchResult(TypedDict, Generic[ResponseType]):
-    """搜索结果"""
+    """Represents a search result set."""
     items: List[ResponseType]
     total: int
     page: int
@@ -319,26 +319,26 @@ class SearchResult(TypedDict, Generic[ResponseType]):
     took_ms: float
 
 class SearchIndex(Protocol):
-    """搜索索引协议"""
+    """Protocol describing search index operations."""
     async def index_document(self, doc_id: str, document: Dict[str, Any]) -> bool:
-        """索引文档"""
+        """Index or update a document."""
         ...
 
     async def search(self, query: SearchQuery) -> SearchResult[Dict[str, Any]]:
-        """搜索文档"""
+        """Search documents."""
         ...
 
     async def delete_document(self, doc_id: str) -> bool:
-        """删除文档"""
+        """Delete a document from the index."""
         ...
 
     async def rebuild_index(self) -> bool:
-        """重建索引"""
+        """Rebuild the entire index."""
         ...
 
-# 通知系统类型
+# Notification system types
 class Notification(TypedDict):
-    """通知"""
+    """Notification payload stored for a user."""
     notification_id: str
     user_id: str
     title: str
@@ -349,18 +349,18 @@ class Notification(TypedDict):
     data: Optional[Dict[str, Any]]
 
 class NotificationChannel(Protocol):
-    """通知渠道协议"""
+    """Protocol for notification delivery channels."""
     async def send(self, notification: Notification) -> bool:
-        """发送通知"""
+        """Send a single notification."""
         ...
 
     async def send_bulk(self, notifications: List[Notification]) -> Dict[str, List[str]]:
-        """批量发送通知"""
+        """Send notifications in bulk."""
         ...
 
-# 审计日志类型
+# Audit log types
 class AuditLog(TypedDict):
-    """审计日志"""
+    """Audit log entry."""
     log_id: str
     user_id: str
     action: str
@@ -371,25 +371,25 @@ class AuditLog(TypedDict):
     user_agent: Optional[str]
     timestamp: datetime
 
-# 统计和分析类型
+# Analytics types
 class UsageStatistics(TypedDict):
-    """使用统计"""
+    """Usage statistic datapoint."""
     metric_name: str
     value: float
     timestamp: datetime
     dimensions: Optional[Dict[str, str]]
 
 class PerformanceMetrics(TypedDict):
-    """性能指标"""
+    """Performance measurement datapoint."""
     operation: str
     duration_ms: float
     success: bool
     timestamp: datetime
     details: Optional[Dict[str, Any]]
 
-# 错误处理类型
+# Error-handling types
 class ErrorContext(TypedDict):
-    """错误上下文"""
+    """Context associated with an error."""
     error_id: str
     error_code: str
     message: str
@@ -401,37 +401,37 @@ class ErrorContext(TypedDict):
     details: Optional[Dict[str, Any]]
 
 class ErrorRecoveryStrategy(Protocol):
-    """错误恢复策略协议"""
+    """Protocol for defining retry/recovery strategies."""
     def should_retry(self, error: Exception, attempt: int) -> bool:
-        """是否应该重试"""
+        """Return whether we should retry."""
         ...
 
     def get_retry_delay(self, attempt: int) -> float:
-        """获取重试延迟"""
+        """Return delay before the next retry."""
         ...
 
     def handle_failure(self, error: Exception, context: ErrorContext) -> Any:
-        """处理失败"""
+        """Handle terminal failure."""
         ...
 
-# 版本和兼容性类型
+# Version/compatibility types
 class APIVersion(TypedDict):
-    """API版本信息"""
+    """API version metadata."""
     version: str
     deprecated: bool
     sunset_date: Optional[datetime]
     migration_guide: Optional[str]
 
 class CompatibilityMatrix(TypedDict):
-    """兼容性矩阵"""
+    """Compatibility mapping between API and client versions."""
     api_version: str
     client_version: str
     compatible: bool
     features: List[str]
 
-# 工具类型
+# Helper utilities
 def create_success_response(data: ResponseType, message: str = "Success") -> SuccessResponse[ResponseType]:
-    """创建成功响应"""
+    """Create a success response payload."""
     return {
         "success": True,
         "data": data,
@@ -439,7 +439,7 @@ def create_success_response(data: ResponseType, message: str = "Success") -> Suc
     }
 
 def create_error_response(error_code: str, message: str, details: Optional[Dict[str, Any]] = None) -> ErrorResponse:
-    """创建错误响应"""
+    """Create an error response payload."""
     return {
         "success": False,
         "error_code": error_code,
@@ -453,7 +453,7 @@ def create_pagination_response(
     page_size: int,
     total: int
 ) -> PaginationResponse[ResponseType]:
-    """创建分页响应"""
+    """Create a pagination response payload."""
     total_pages = (total + page_size - 1) // page_size
 
     return {

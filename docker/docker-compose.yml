@@ -31,7 +31,7 @@ services:
       - my-network
 
 
-  # FastAPI应用（增强配置）
+  # FastAPI
   app:
     build: .
     container_name: dataset_app
@@ -62,13 +62,7 @@ services:
       minio:
         condition: service_healthy
     networks:
-      - auth_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 90s
+      - my-network
 
 
   minio:

@@ -1,17 +1,16 @@
-"""Utility functions for file operations - 改进版本，使用现代Python特性."""
+"""Utility functions for file operations"""
 import asyncio
 import hashlib
 import logging
 import mimetypes
 import os
 import shutil
-import tempfile
 import zipfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Union
 
 from app.core.exceptions import (
     FileNotFoundException,
@@ -19,7 +18,7 @@ from app.core.exceptions import (
     ValidationException,
 )
 
-# from app.core.decorators import performance_monitor, cache_result, exception_handler  # 避免循环导入
+# from app.core.decorators import performance_monitor, cache_result, exception_handler  # Avoid circular import
 from app.utils.logger import get_logger
 
 logger: logging.Logger = get_logger(__name__)
@@ -27,7 +26,7 @@ logger: logging.Logger = get_logger(__name__)
 
 @dataclass
 class FileInfo:
-    """文件信息数据类"""
+    """File information data class"""
     path: Path
     size: int
     modified_time: datetime
@@ -38,7 +37,7 @@ class FileInfo:
 
 @dataclass
 class ArchiveExtractionResult:
-    """压缩包提取结果"""
+    """Archive extraction result data class"""
     success: bool
     extracted_files: List[Path] = None
     total_size: int = 0
@@ -56,25 +55,25 @@ class ArchiveExtractionResult:
 
 
 class FileOperationError(Exception):
-    """文件操作异常"""
+    """File operation base exception"""
     pass
 
 
 class FileProcessor:
-    """文件处理器 - 提供高性能的文件操作"""
+    """File Processor - Provides high-performance file operations"""
 
     @staticmethod
     def get_file_hash(file_path: Union[str, Path], algorithm: str = "md5", chunk_size: int = 8192) -> str:
         """
-        计算文件哈希值
+        Calculate file hash value
 
         Args:
-            file_path: 文件路径
-            algorithm: 哈希算法 (md5, sha1, sha256)
-            chunk_size: 读取块大小
+            file_path: Path to the file
+            algorithm: Hash algorithm (md5, sha1, sha256)
+            chunk_size: Reading chunk size
 
         Returns:
-            str: 哈希值
+            str: Calculated hash value
         """
         file_path = Path(file_path)
 
@@ -103,15 +102,15 @@ class FileProcessor:
     def get_file_info(file_path: Union[str, Path], include_hash: bool = False,
                      hash_algorithm: str = "md5") -> FileInfo:
         """
-        获取文件详细信息
+        Get detailed file information
 
         Args:
-            file_path: 文件路径
-            include_hash: 是否包含哈希值
-            hash_algorithm: 哈希算法
+            file_path: Path to the file
+            include_hash: Whether to include hash value
+            hash_algorithm: Hash algorithm to use if include_hash is True
 
         Returns:
-            FileInfo: 文件信息
+            FileInfo: File information object
         """
         file_path = Path(file_path)
 
@@ -141,14 +140,14 @@ class FileProcessor:
     @staticmethod
     def safe_remove(path: Union[str, Path], force: bool = False) -> bool:
         """
-        安全删除文件或目录
+        Safely delete file or directory
 
         Args:
-            path: 文件或目录路径
-            force: 是否强制删除（绕过回收站等）
+            path: Path to file or directory
+            force: Whether to force deletion (bypass recycle bin etc.)
 
         Returns:
-            bool: 删除是否成功
+            bool: True if deletion succeeded, False otherwise
         """
         path = Path(path)
 
@@ -169,7 +168,7 @@ class FileProcessor:
             logger.error(f"Failed to remove path {path}: {e}")
             if force:
                 try:
-                    # 强制删除
+                    # Force deletion attempt
                     if path.is_file():
                         path.unlink(missing_ok=True)
                     elif path.is_dir():
@@ -182,14 +181,14 @@ class FileProcessor:
     @staticmethod
     def ensure_directory(path: Union[str, Path], mode: int = 0o755) -> Path:
         """
-        确保目录存在，如果不存在则创建
+        Ensure directory exists; create if it doesn't
 
         Args:
-            path: 目录路径
-            mode: 目录权限
+            path: Directory path
+            mode: Directory permission mode
 
         Returns:
-            Path: 创建的目录路径
+            Path: Created directory path
         """
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True, mode=mode)
@@ -201,16 +200,16 @@ class FileProcessor:
                   recursive: bool = False,
                   include_hidden: bool = False) -> Iterator[FileInfo]:
         """
-        列出目录中的文件
+        List files in directory
 
         Args:
-            directory: 目录路径
-            pattern: 文件名模式匹配
-            recursive: 是否递归搜索
-            include_hidden: 是否包含隐藏文件
+            directory: Directory path
+            pattern: Filename pattern matching
+            recursive: Whether to search recursively
+            include_hidden: Whether to include hidden files
 
         Yields:
-            FileInfo: 文件信息
+            FileInfo: File information object for each matching file
         """
         directory = Path(directory)
 
@@ -228,12 +227,12 @@ class FileProcessor:
             if not pattern_path:
                 return True
 
-            # 简单的模式匹配
+            # Simple pattern matching
             name = filename.lower()
             pattern_str = str(pattern_path).lower()
 
             if '*' in pattern_str:
-                # 转换glob模式为简单匹配
+                # Convert glob pattern to simple matching
                 pattern_parts = pattern_str.split('*')
                 if len(pattern_parts) == 2:
                     return (pattern_parts[0] in name or not pattern_parts[0]) and \
@@ -268,7 +267,7 @@ class FileProcessor:
 
 
 class ArchiveProcessor:
-    """压缩包处理器"""
+    """Archive Processor - Handles archive file operations"""
 
     @staticmethod
     def extract_zip_safe(zip_path: Union[str, Path],
@@ -276,16 +275,16 @@ class ArchiveProcessor:
                         root_folder_name: Optional[str] = None,
                         skip_hidden: bool = True) -> ArchiveExtractionResult:
         """
-        安全解压ZIP文件，跳过指定的根目录
+        Safely extract ZIP file, skip specified root directory
 
         Args:
-            zip_path: ZIP文件路径
-            extract_dir: 解压目标目录
-            root_folder_name: 要跳过的根目录名，None则自动检测
-            skip_hidden: 是否跳过隐藏文件和目录
+            zip_path: Path to ZIP file
+            extract_dir: Target extraction directory
+            root_folder_name: Root directory name to skip (auto-detect if None)
+            skip_hidden: Whether to skip hidden files and directories
 
         Returns:
-            ArchiveExtractionResult: 解压结果
+            ArchiveExtractionResult: Extraction result object
         """
         zip_path = Path(zip_path)
         extract_dir = Path(extract_dir)
@@ -305,7 +304,7 @@ class ArchiveProcessor:
             warnings = []
 
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                # 自动检测根目录名
+                # Auto-detect root folder name
                 if root_folder_name is None:
                     names = zip_ref.namelist()
                     for name in names:
@@ -313,17 +312,17 @@ class ArchiveProcessor:
                             root_folder_name = name.split('/')[0]
                             break
 
-                # 提取文件
+                # Extract files
                 for member in zip_ref.namelist():
-                    # 跳过系统文件
+                    # Skip system files
                     if skip_hidden and (member.startswith('__MACOSX/') or member.startswith('._')):
                         continue
 
-                    # 跳过根目录条目
+                    # Skip root directory entry
                     if root_folder_name and member == root_folder_name + '/':
                         continue
 
-                    # 处理文件路径
+                    # Process file path
                     if root_folder_name and member.startswith(root_folder_name + '/'):
                         new_member = member[len(root_folder_name + '/'):]
                         if not new_member:
@@ -331,15 +330,15 @@ class ArchiveProcessor:
                     else:
                         new_member = member
 
-                    # 提取文件
+                    # Extract file
                     try:
                         target_path = extract_dir / new_member
 
-                        # 确保目标目录存在
+                        # Ensure target directory exists
                         if '/' in new_member:
                             target_path.parent.mkdir(parents=True, exist_ok=True)
 
-                        # 提取文件内容
+                        # Extract file content
                         with zip_ref.open(member) as source, open(target_path, 'wb') as target:
                             shutil.copyfileobj(source, target)
 
@@ -368,13 +367,13 @@ class ArchiveProcessor:
     @staticmethod
     def get_zip_info(zip_path: Union[str, Path]) -> Dict[str, Any]:
         """
-        获取ZIP文件信息
+        Get ZIP file information
 
         Args:
-            zip_path: ZIP文件路径
+            zip_path: Path to ZIP file
 
         Returns:
-            Dict: ZIP文件信息
+            Dict: ZIP file metadata
         """
         zip_path = Path(zip_path)
 
@@ -387,7 +386,7 @@ class ArchiveProcessor:
                 file_count = len([f for f in file_list if not f.endswith('/')])
                 dir_count = len([f for f in file_list if f.endswith('/')])
 
-                # 计算总大小
+                # Calculate total size
                 total_size = sum(zip_ref.getinfo(f).file_size for f in file_list if not f.endswith('/'))
 
                 return {
@@ -397,7 +396,7 @@ class ArchiveProcessor:
                     "total_size_mb": round(total_size / 1024 / 1024, 2),
                     "compressed_size": zip_path.stat().st_size,
                     "compression_ratio": round((1 - zip_path.stat().st_size / total_size) * 100, 2) if total_size > 0 else 0,
-                    "files": file_list[:20],  # 前20个文件
+                    "files": file_list[:20],  # First 20 files
                     "has_root_folder": ArchiveProcessor._has_single_root_folder(file_list)
                 }
 
@@ -406,17 +405,17 @@ class ArchiveProcessor:
 
     @staticmethod
     def _has_single_root_folder(file_list: List[str]) -> bool:
-        """检查是否有单一的根文件夹"""
+        """Check if ZIP file has a single root folder"""
         if not file_list:
             return False
 
-        # 获取第一级目录
+        # Get first-level directories
         first_level_items = set()
         for item in file_list:
             if '/' in item:
                 first_level_items.add(item.split('/')[0])
 
-        # 过滤掉系统文件夹
+        # Filter out system folders
         system_folders = {'__MACOSX', '__pycache__', '.DS_Store'}
         first_level_items = first_level_items - system_folders
 
@@ -424,27 +423,27 @@ class ArchiveProcessor:
 
 
 class FileValidator:
-    """文件验证器"""
+    """File Validator - Validates file formats and integrity"""
 
-    # 支持的图像格式
+    # Supported image formats
     SUPPORTED_IMAGE_FORMATS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp', '.gif'}
 
-    # 支持的文档格式
+    # Supported document formats
     SUPPORTED_DOCUMENT_FORMATS = {'.pdf', '.txt', '.json', '.yaml', '.yml', '.csv'}
 
-    # 支持的压缩包格式
+    # Supported archive formats
     SUPPORTED_ARCHIVE_FORMATS = {'.zip', '.tar', '.gz', '.bz2', '.7z', '.rar'}
 
     @staticmethod
     def validate_image_file(file_path: Union[str, Path]) -> Dict[str, Any]:
         """
-        验证图像文件
+        Validate image file
 
         Args:
-            file_path: 文件路径
+            file_path: Path to image file
 
         Returns:
-            Dict: 验证结果
+            Dict: Validation result
         """
         file_path = Path(file_path)
 
@@ -457,15 +456,15 @@ class FileValidator:
         try:
             file_info = FileProcessor.get_file_info(file_path, include_hash=False)
 
-            # 基本验证
+            # Basic validation
             if file_info.size == 0:
                 raise ValidationException("Image file is empty")
 
             if file_info.size > 100 * 1024 * 1024:  # 100MB
                 raise ValidationException("Image file too large (max 100MB)")
 
-            # 可以添加更具体的图像格式验证
-            # 例如使用PIL验证图像完整性
+            # Additional format-specific validation can be added here
+            # e.g., using PIL to verify image integrity
 
             return {
                 "is_valid": True,
@@ -480,13 +479,13 @@ class FileValidator:
     @staticmethod
     def validate_archive_file(file_path: Union[str, Path]) -> Dict[str, Any]:
         """
-        验证压缩包文件
+        Validate archive file
 
         Args:
-            file_path: 文件路径
+            file_path: Path to archive file
 
         Returns:
-            Dict: 验证结果
+            Dict: Validation result
         """
         file_path = Path(file_path)
 
@@ -508,7 +507,7 @@ class FileValidator:
                     "validation_passed": True
                 }
             else:
-                # 其他格式的验证可以后续添加
+                # Validation for other formats can be added later
                 return {
                     "is_valid": True,
                     "file_info": FileProcessor.get_file_info(file_path),
@@ -520,9 +519,9 @@ class FileValidator:
             raise FileOperationError(f"Archive validation failed: {e}")
 
 
-# 兼容性函数 - 保持向后兼容
+# Compatibility functions - Maintain backward compatibility
 def resolve_target_directory(zip_file_path, target_folder_name=None):
-    """从zip文件路径解析目标目录路径"""
+    """Resolve target directory path from ZIP file path"""
     zip_path = Path(zip_file_path)
 
     if target_folder_name is None:
@@ -533,39 +532,39 @@ def resolve_target_directory(zip_file_path, target_folder_name=None):
 
 
 def extract_skip_root_safe(zip_path: str, extract_dir: str, root_folder_name: Optional[str] = None) -> None:
-    """解压zip文件，跳过指定的根目录"""
+    """Extract ZIP file and skip specified root directory"""
     result = ArchiveProcessor.extract_zip_safe(zip_path, extract_dir, root_folder_name)
     if not result.success and result.errors:
         raise FileOperationError(f"Extraction failed: {'; '.join(result.errors)}")
 
 
 def ensure_directory(path: str) -> None:
-    """确保目录存在"""
+    """Ensure directory exists (compatibility wrapper)"""
     FileProcessor.ensure_directory(path)
 
 
 def get_file_hash(file_path: str, chunk_size: int = 8192) -> str:
-    """计算文件MD5哈希"""
+    """Calculate file MD5 hash (compatibility wrapper)"""
     return FileProcessor.get_file_hash(file_path, "md5", chunk_size)
 
 
 def safe_remove(path: str) -> bool:
-    """安全删除文件或目录"""
+    """Safely delete file or directory (compatibility wrapper)"""
     return FileProcessor.safe_remove(path)
 
 
 def get_file_size(file_path: str) -> int:
-    """获取文件大小"""
+    """Get file size in bytes (compatibility wrapper)"""
     return FileProcessor.get_file_info(file_path).size
 
 
 def get_extension(filename: str) -> str:
-    """获取文件扩展名"""
+    """Get file extension (lowercase)"""
     return Path(filename).suffix.lower()
 
 
 def is_valid_filename(filename: str) -> bool:
-    """检查文件名是否有效"""
+    """Check if filename is valid (no invalid characters)"""
     if not filename or filename.startswith('.'):
         return False
 

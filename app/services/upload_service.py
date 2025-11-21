@@ -2,17 +2,17 @@
 
 import asyncio
 import hashlib
+import logging
 from dataclasses import asdict
 from datetime import datetime
-import logging
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from app.config import settings
 from bson import ObjectId
 from fastapi import HTTPException, status
 from PIL import Image
 
+from app.config import settings
 from app.models.dataset import Dataset
 from app.services import dataset_service, image_service, minio_service
 from app.utils import resolve_target_directory, yolo_validator
@@ -61,7 +61,7 @@ class UploadService:
             dataset_root = validation_result.dataset_info.get("dataset_root", None)
 
             dataset = Dataset(
-                name=getattr(dataset_info, "name", dataset_root.name),
+                name=getattr(dataset_info, "name", ""),
                 description=getattr(dataset_info, "description", ""),
                 dataset_type=dataset_type,
                 class_names=class_names,
@@ -80,14 +80,14 @@ class UploadService:
 
             dataset_id = await dataset_service.create_dataset(dataset)
 
-            # 确保 dataset_root 存在后再启动后台任务
+            # Ensure dataset_root exists before scheduling the background task
             if dataset_root is None:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Failed to extract dataset root directory",
                 )
 
-            # 在后台启动处理任务，不阻塞当前请求
+            # Schedule background processing without blocking the request
             asyncio.create_task(
                 self._background_process_images_and_annotations(
                     dataset_root,
@@ -98,15 +98,15 @@ class UploadService:
                 )
             )
 
-            # 立即返回，前端不需要等待处理完成
+            # Return immediately so the client does not wait for processing
             return {
                 "status": "success",
                 "dataset_id": dataset_id,
                 "message": "Dataset created successfully. Processing images in background.",
                 "dataset_type": dataset_type,
             }
-        except Exception as e:
-            # 如果创建数据集失败，清理临时文件
+        except Exception:
+            # Clean up temporary files if dataset creation fails
             if dataset_root:
                 safe_remove(dataset_root)
                 if dataset_root.parent.exists():
@@ -123,7 +123,7 @@ class UploadService:
         zip_path: str,
     ) -> None:
         """
-        后台处理图片和标注，包括错误处理和清理。
+        Background worker that processes images and annotations with proper cleanup.
 
         Args:
             dataset_root: Root directory of dataset
@@ -133,53 +133,57 @@ class UploadService:
             zip_path: Path to ZIP file for cleanup
         """
         try:
-            logger.info(f"开始后台处理数据集 {dataset_id}")
-            
-            # 处理图片和标注
+            logger.info("Starting background processing for dataset %s", dataset_id)
+
+            # Process images and annotations
             processed_count = await self._process_images_and_annotations(
                 dataset_root,
                 dataset_id,
                 dataset_type,
                 class_names,
             )
-            
-            # 更新数据集状态为 active
+
+            # Update dataset status to active
             await dataset_service.repository.update(
                 dataset_id,
                 {
                     "status": "active",
-                    "updated_at": datetime.utcnow()
-                }
+                    "updated_at": datetime.utcnow(),
+                },
             )
-            
+
             logger.info(
-                f"✅ 数据集 {dataset_id} 处理完成: "
-                f"已处理 {processed_count} 张图片"
+                "Dataset %s background processing completed. Processed %s images",
+                dataset_id,
+                processed_count,
             )
-            
-        except Exception as e:
+
+        except Exception as exc:
             logger.error(
-                f"❌ 数据集 {dataset_id} 后台处理失败: {e}",
-                exc_info=True
+                "Dataset %s background processing failed: %s",
+                dataset_id,
+                exc,
+                exc_info=True,
             )
-            
-            # 更新数据集状态为 error，并记录错误信息
+
+            # Update dataset status to error and record message
             try:
                 await dataset_service.repository.update(
                     dataset_id,
                     {
                         "status": "error",
-                        "error_message": str(e),
-                        "updated_at": datetime.utcnow()
-                    }
+                        "error_message": str(exc),
+                        "updated_at": datetime.utcnow(),
+                    },
                 )
             except Exception as update_error:
                 logger.error(
-                    f"更新数据集状态失败: {update_error}",
-                    exc_info=True
+                    "Failed to update dataset status after error: %s",
+                    update_error,
+                    exc_info=True,
                 )
         finally:
-            # 清理临时文件
+            # Clean up temporary files created during processing
             try:
                 if dataset_root and dataset_root.exists():
                     safe_remove(dataset_root)
@@ -187,11 +191,16 @@ class UploadService:
                         safe_remove(dataset_root.parent)
                 if zip_path:
                     safe_remove(zip_path)
-                logger.debug(f"已清理临时文件: {dataset_root}, {zip_path}")
+                logger.debug(
+                    "Cleaned up temporary files: %s, %s",
+                    dataset_root,
+                    zip_path,
+                )
             except Exception as cleanup_error:
                 logger.warning(
-                    f"清理临时文件失败: {cleanup_error}",
-                    exc_info=True
+                    "Failed to clean up temporary files: %s",
+                    cleanup_error,
+                    exc_info=True,
                 )
 
     async def _process_images_and_annotations(
@@ -214,14 +223,14 @@ class UploadService:
             int: Number of processed images
         """
 
-        # 更新数据集状态为 processing
+        # Update dataset status for train split
         await dataset_service.repository.update(
             dataset_id,
             {
                 "status": "processing",
-                 "message": "Processing train images in background.",
-                "updated_at": datetime.utcnow()
-            }
+                "message": "Processing train images in background.",
+                "updated_at": datetime.utcnow(),
+            },
         )
 
         train_images, train_annotations, train_size = await self.process_split(
@@ -232,14 +241,14 @@ class UploadService:
             class_names,
         )
 
-        # 更新数据集状态为 processing
+        # Update dataset status for validation split
         await dataset_service.repository.update(
             dataset_id,
             {
                 "status": "processing",
-                 "message": "Processing val images in background.",
-                "updated_at": datetime.utcnow()
-            }
+                "message": "Processing val images in background.",
+                "updated_at": datetime.utcnow(),
+            },
         )
 
         val_images, val_annotations, val_size = await self.process_split(
@@ -250,14 +259,14 @@ class UploadService:
             class_names,
         )
 
-        # 更新数据集状态为 processing
+        # Update dataset status for test split
         await dataset_service.repository.update(
             dataset_id,
             {
                 "status": "processing",
-                 "message": "Processing test images in background.",
-                "updated_at": datetime.utcnow()
-            }
+                "message": "Processing test images in background.",
+                "updated_at": datetime.utcnow(),
+            },
         )
 
         test_images, test_annotations, test_size = await self.process_split(
@@ -341,11 +350,11 @@ class UploadService:
         labels_dir = dataset_root_path / "labels" / split_name
 
         if not images_dir.exists():
-            logger.error(f"  ⚠ Images directory not found: {images_dir}")
+            logger.error("  WARNING: Images directory not found: %s", images_dir)
             return 0, 0, 0
 
         if not labels_dir.exists():
-            logger.error(f"  ⚠ Labels directory not found: {labels_dir}")
+            logger.error("  WARNING: Labels directory not found: %s", labels_dir)
             return 0, 0, 0
 
         # Get all image files
@@ -438,7 +447,10 @@ class UploadService:
                 )
             except Exception as e:
                 logger.error(
-                    f"  ✗ Failed to prepare {image_path.name}: {e}", exc_info=True
+                    "  Failed to prepare %s: %s",
+                    image_path.name,
+                    e,
+                    exc_info=True,
                 )
                 continue
 
@@ -494,7 +506,8 @@ class UploadService:
         failed_list = upload_result.get("failed_list", upload_result.get("failed_files", []))
         if failed_list:
             logger.warning(
-                f"\n  ⚠ {len(failed_list)} images failed to upload:"
+                "\n  WARNING: %d images failed to upload:",
+                len(failed_list),
             )
             for failed in failed_list[:10]:  # Show first 10 failures
                 if isinstance(failed, dict):

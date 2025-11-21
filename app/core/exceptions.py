@@ -1,10 +1,10 @@
-"""统一异常类型和错误管理模块"""
+"""Centralized exception definitions and error taxonomy."""
 from enum import Enum
 from typing import Any, Dict, Optional
 
 
 class ErrorSeverity(Enum):
-    """错误严重级别"""
+    """Describes severity for surfaced errors."""
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -12,7 +12,7 @@ class ErrorSeverity(Enum):
 
 
 class ErrorCategory(Enum):
-    """错误类别"""
+    """Categorization used for error routing and analytics."""
     AUTHENTICATION = "authentication"
     AUTHORIZATION = "authorization"
     VALIDATION = "validation"
@@ -26,7 +26,7 @@ class ErrorCategory(Enum):
 
 
 class YOLOException(Exception):
-    """基础业务异常类"""
+    """Base exception type for the application."""
 
     def __init__(
         self,
@@ -46,7 +46,7 @@ class YOLOException(Exception):
         super().__init__(self.message)
 
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典格式"""
+        """Serialize exception metadata into a dict."""
         return {
             "error_code": self.error_code,
             "message": self.message,
@@ -57,11 +57,11 @@ class YOLOException(Exception):
         }
 
 
-# 认证相关异常
+# Authentication exceptions
 class AuthenticationException(YOLOException):
-    """认证异常"""
+    """Raised when authentication fails."""
 
-    def __init__(self, message: str = "认证失败", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str = "Authentication failed", details: Optional[Dict[str, Any]] = None):
         super().__init__(
             message=message,
             error_code="AUTH_FAILED",
@@ -72,9 +72,9 @@ class AuthenticationException(YOLOException):
 
 
 class AuthorizationException(YOLOException):
-    """授权异常"""
+    """Raised when a user lacks required permissions."""
 
-    def __init__(self, message: str = "权限不足", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str = "Insufficient permissions", details: Optional[Dict[str, Any]] = None):
         super().__init__(
             message=message,
             error_code="AUTHZ_INSUFFICIENT",
@@ -84,9 +84,9 @@ class AuthorizationException(YOLOException):
         )
 
 
-# 数据验证异常
+# Validation exceptions
 class ValidationException(YOLOException):
-    """数据验证异常"""
+    """Raised when request or model validation fails."""
 
     def __init__(self, message: str, field: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
         validation_details = details or {}
@@ -101,9 +101,9 @@ class ValidationException(YOLOException):
         )
 
 
-# 业务逻辑异常
+# Business logic exceptions
 class BusinessLogicException(YOLOException):
-    """业务逻辑异常"""
+    """Raised when business rules cannot be satisfied."""
 
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
         super().__init__(
@@ -116,11 +116,11 @@ class BusinessLogicException(YOLOException):
 
 
 class DatasetNotFoundException(YOLOException):
-    """数据集未找到异常"""
+    """Raised when a dataset identifier cannot be located."""
 
     def __init__(self, dataset_id: str):
         super().__init__(
-            message=f"数据集未找到: {dataset_id}",
+            message=f"Dataset not found: {dataset_id}",
             error_code="DATASET_NOT_FOUND",
             category=ErrorCategory.BUSINESS_LOGIC,
             severity=ErrorSeverity.HIGH,
@@ -129,11 +129,11 @@ class DatasetNotFoundException(YOLOException):
 
 
 class DatasetAlreadyExistsException(YOLOException):
-    """数据集已存在异常"""
+    """Raised when attempting to create a duplicate dataset."""
 
     def __init__(self, dataset_name: str):
         super().__init__(
-            message=f"数据集已存在: {dataset_name}",
+            message=f"Dataset already exists: {dataset_name}",
             error_code="DATASET_ALREADY_EXISTS",
             category=ErrorCategory.BUSINESS_LOGIC,
             severity=ErrorSeverity.MEDIUM,
@@ -141,9 +141,9 @@ class DatasetAlreadyExistsException(YOLOException):
         )
 
 
-# 数据库相关异常
+# Database exceptions
 class DatabaseException(YOLOException):
-    """数据库操作异常"""
+    """Raised for database operation failures."""
 
     def __init__(self, message: str, operation: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
         db_details = details or {}
@@ -159,9 +159,9 @@ class DatabaseException(YOLOException):
 
 
 class DatabaseConnectionException(DatabaseException):
-    """数据库连接异常"""
+    """Raised when establishing a database connection fails."""
 
-    def __init__(self, message: str = "数据库连接失败", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str = "Database connection failed", details: Optional[Dict[str, Any]] = None):
         super().__init__(
             message=message,
             operation="connection",
@@ -170,9 +170,9 @@ class DatabaseConnectionException(DatabaseException):
         )
 
 
-# 存储相关异常
+# Storage exceptions
 class StorageException(YOLOException):
-    """存储操作异常"""
+    """Raised for storage layer failures."""
 
     def __init__(self, message: str, operation: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
         storage_details = details or {}
@@ -188,7 +188,7 @@ class StorageException(YOLOException):
 
 
 class FileUploadException(StorageException):
-    """文件上传异常"""
+    """Raised when file upload operations fail."""
 
     def __init__(self, message: str, filename: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
         upload_details = details or {}
@@ -203,20 +203,20 @@ class FileUploadException(StorageException):
 
 
 class FileNotFoundException(StorageException):
-    """文件未找到异常"""
+    """Raised when a file cannot be located."""
 
     def __init__(self, file_path: str):
         super().__init__(
-            message=f"文件未找到: {file_path}",
+            message=f"File not found: {file_path}",
             operation="access",
             severity=ErrorSeverity.MEDIUM,
             details={"file_path": file_path}
         )
 
 
-# YOLO相关异常
+# YOLO-specific exceptions
 class YOLOValidationException(YOLOException):
-    """YOLO格式验证异常"""
+    """Raised when YOLO format validation fails."""
 
     def __init__(self, message: str, dataset_path: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
         validation_details = details or {}
@@ -232,7 +232,7 @@ class YOLOValidationException(YOLOException):
 
 
 class YOLODatasetTypeException(YOLOException):
-    """YOLO数据集类型异常"""
+    """Raised for unsupported YOLO dataset types."""
 
     def __init__(self, message: str, dataset_type: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
         type_details = details or {}
@@ -247,9 +247,9 @@ class YOLODatasetTypeException(YOLOException):
         )
 
 
-# 系统异常
+# System exceptions
 class SystemException(YOLOException):
-    """系统级异常"""
+    """Raised for generic internal/system failures."""
 
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
         super().__init__(
@@ -262,7 +262,7 @@ class SystemException(YOLOException):
 
 
 class ConfigurationException(YOLOException):
-    """配置异常"""
+    """Raised for configuration/initialization failures."""
 
     def __init__(self, message: str, config_key: Optional[str] = None, details: Optional[Dict[str, Any]] = None):
         config_details = details or {}

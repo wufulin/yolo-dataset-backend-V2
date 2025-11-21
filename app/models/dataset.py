@@ -45,11 +45,11 @@ class Dataset(BaseModel):
         return v
 
     def to_dict(self) -> dict:
-        """转换为字典格式"""
+        """Return dict representation respecting aliases."""
         return self.model_dump(by_alias=True) if hasattr(self, 'model_dump') else self.dict(by_alias=True)
 
     def to_mongo_dict(self) -> dict:
-        """转换为MongoDB字典格式（处理ObjectId）"""
+        """Return dict suited for MongoDB inserts/updates."""
         data = self.to_dict()
         # Remove _id if it exists (it shouldn't for new documents)
         if '_id' in data and data['_id'] is None:
@@ -58,7 +58,7 @@ class Dataset(BaseModel):
 
     @classmethod
     def from_mongo_dict(cls, data: dict) -> 'Dataset':
-        """从MongoDB字典创建模型实例"""
+        """Instantiate Dataset from MongoDB record."""
         # Convert _id to string if it's ObjectId
         if '_id' in data:
             if isinstance(data['_id'], ObjectId):

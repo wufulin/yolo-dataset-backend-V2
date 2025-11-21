@@ -1,4 +1,4 @@
-"""改进的服务工厂模式实现"""
+"""Enhanced service factory pattern implementation."""
 from abc import ABC, abstractmethod
 from typing import (
     Any,
@@ -16,24 +16,24 @@ from app.utils.logger import get_logger
 
 logger: logging.Logger = get_logger(__name__)
 
-# 类型变量
+# Type variables
 T = TypeVar('T')
 
 
 @runtime_checkable
 class ServiceProtocol(Protocol):
-    """服务基础协议"""
+    """Base protocol shared by all services."""
     def initialize(self, **kwargs) -> None:
-        """初始化服务"""
+        """Initialize service resources."""
         ...
 
     def get_status(self) -> Dict[str, Any]:
-        """获取服务状态"""
+        """Return health/status metadata."""
         ...
 
 
 class BaseService(ABC, Generic[T]):
-    """基础服务类"""
+    """Abstract base class for concrete services."""
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
@@ -41,32 +41,32 @@ class BaseService(ABC, Generic[T]):
 
     @abstractmethod
     def initialize(self, **kwargs) -> None:
-        """初始化服务"""
+        """Initialize service resources."""
         pass
 
     @abstractmethod
     def get_status(self) -> Dict[str, Any]:
-        """获取服务状态"""
+        """Return health/status metadata."""
         pass
 
     def is_initialized(self) -> bool:
-        """检查是否已初始化"""
+        """Return True if initialize() has been called."""
         return self._initialized
 
     def _mark_initialized(self) -> None:
-        """标记为已初始化"""
+        """Mark service as initialized."""
         self._initialized = True
 
 
 class ServiceRegistry:
-    """服务注册中心"""
+    """Registry for service classes and cached instances."""
 
     def __init__(self):
         self._services: Dict[str, Type[BaseService]] = {}
         self._instances: Dict[str, BaseService] = {}
 
     def register(self, service_name: str, service_class: Type[BaseService]) -> None:
-        """注册服务"""
+        """Register a BaseService subclass under a name."""
         if not issubclass(service_class, BaseService):
             raise BusinessLogicException(f"Service class must inherit from BaseService: {service_name}")
 
@@ -74,20 +74,20 @@ class ServiceRegistry:
         logger.info(f"Registered service: {service_name}")
 
     def get_service_class(self, service_name: str) -> Type[BaseService]:
-        """获取服务类"""
+        """Return registered service class by name."""
         if service_name not in self._services:
             raise BusinessLogicException(f"Service not registered: {service_name}")
 
         return self._services[service_name]
 
     def create_service(self, service_name: str, **kwargs) -> BaseService:
-        """创建服务实例"""
+        """Instantiate a service by name."""
         service_class = self.get_service_class(service_name)
         instance = service_class(**kwargs)
         return instance
 
     def get_cached_service(self, service_name: str, **kwargs) -> BaseService:
-        """获取缓存的服务实例"""
+        """Return cached service instance keyed by args."""
         cache_key = f"{service_name}:{hash(str(sorted(kwargs.items())))}"
 
         if cache_key in self._instances:
@@ -98,43 +98,42 @@ class ServiceRegistry:
         return instance
 
     def unregister(self, service_name: str) -> None:
-        """注销服务"""
+        """Remove service registration."""
         if service_name in self._services:
             del self._services[service_name]
             logger.info(f"Unregistered service: {service_name}")
 
     def list_services(self) -> list[str]:
-        """列出已注册的服务"""
+        """List registered service names."""
         return list(self._services.keys())
 
 
 class EnhancedServiceFactory:
-    """增强的服务工厂"""
+    """Higher-level factory that supports lazy creation and caching."""
 
     def __init__(self):
         self.registry = ServiceRegistry()
         self._setup_default_services()
 
     def _setup_default_services(self) -> None:
-        """设置默认服务"""
-        # 这里可以注册默认的服务类
-        # 由于循环导入问题，暂时使用延迟注册
+        """Register built-in services (left blank for lazy registration)."""
+        # Default services can be registered here; deferred to avoid circular imports.
         pass
 
     def register_service(self, service_name: str, service_class: Type[BaseService]) -> None:
-        """注册服务"""
+        """Register a service class explicitly."""
         self.registry.register(service_name, service_class)
 
     def get_service(self, service_name: str, **kwargs) -> BaseService:
-        """获取服务实例"""
+        """Return cached or lazily-created service instance."""
         try:
             return self.registry.get_cached_service(service_name, **kwargs)
         except BusinessLogicException:
-            # 如果没有找到，尝试使用延迟注册
+            # Attempt lazy creation when not pre-registered
             return self._lazy_create_service(service_name, **kwargs)
 
     def _lazy_create_service(self, service_name: str, **kwargs) -> BaseService:
-        """延迟创建服务（解决循环导入问题）"""
+        """Create services lazily to avoid circular imports."""
         service_mappings = {
             'dataset': self._create_dataset_service,
             'image': self._create_image_service,
@@ -149,7 +148,7 @@ class EnhancedServiceFactory:
         return service_mappings[service_name](**kwargs)
 
     def _create_dataset_service(self, **kwargs) -> 'BaseService':
-        """创建数据集服务"""
+        """Create dataset service instance."""
         try:
             from app.services.dataset_service import DatasetService
             service = DatasetService(**kwargs)
@@ -159,7 +158,7 @@ class EnhancedServiceFactory:
             raise BusinessLogicException(f"Cannot create dataset service: {e}")
 
     def _create_image_service(self, **kwargs) -> 'BaseService':
-        """创建图像服务"""
+        """Create image service instance."""
         try:
             from app.services.image_service import ImageService
             service = ImageService(**kwargs)
@@ -169,7 +168,7 @@ class EnhancedServiceFactory:
             raise BusinessLogicException(f"Cannot create image service: {e}")
 
     def _create_minio_service(self, **kwargs) -> 'BaseService':
-        """创建MinIO服务"""
+        """Create MinIO service instance."""
         try:
             from app.services.minio_service import MinioService
             service = MinioService(**kwargs)
@@ -179,17 +178,17 @@ class EnhancedServiceFactory:
             raise BusinessLogicException(f"Cannot create minio service: {e}")
 
     def _create_db_service(self, **kwargs) -> 'BaseService':
-        """创建数据库服务"""
+        """Create database service instance."""
         try:
             from app.services.db_service import DatabaseService
 
-            # 数据库服务是单例
+            # Database service is a singleton provided by import side-effects
             return DatabaseService()
         except ImportError as e:
             raise BusinessLogicException(f"Cannot create db service: {e}")
 
     def _create_redis_service(self, **kwargs) -> 'BaseService':
-        """创建Redis服务"""
+        """Create Redis service instance."""
         try:
             from app.services.redis_service import RedisService
             service = RedisService(**kwargs)
@@ -199,11 +198,11 @@ class EnhancedServiceFactory:
             raise BusinessLogicException(f"Cannot create redis service: {e}")
 
     def get_available_services(self) -> list[str]:
-        """获取可用的服务列表"""
+        """List registered and lazily supported services."""
         return self.registry.list_services() + [
             'dataset', 'image', 'minio', 'db', 'redis'
         ]
 
 
-# 全局服务工厂实例
+# Global service factory instance
 service_factory = EnhancedServiceFactory()

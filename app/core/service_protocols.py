@@ -1,4 +1,4 @@
-"""服务接口协议定义 - 提供类型安全的接口规范"""
+"""Service interface protocol definitions for type-safe contracts."""
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
@@ -15,7 +15,7 @@ from typing import (
     runtime_checkable,
 )
 
-# 类型变量定义
+# Type variables
 T = TypeVar('T')
 ModelType = TypeVar('ModelType')
 CreateSchemaType = TypeVar('CreateSchemaType')
@@ -24,22 +24,22 @@ DatabaseModelType = TypeVar('DatabaseModelType')
 
 
 class QueryFilter(Protocol):
-    """查询过滤器协议"""
+    """Protocol for objects that can be converted to query dictionaries."""
     def to_dict(self) -> Dict[str, Any]:
-        """转换为查询字典"""
+        """Convert filter to dictionary representation."""
         ...
 
 
 @runtime_checkable
 class CRUDRepository(Protocol[ModelType, CreateSchemaType, UpdateSchemaType]):
-    """通用CRUD仓储协议"""
+    """Generic asynchronous CRUD repository protocol."""
 
     async def create(self, obj: CreateSchemaType, **kwargs) -> ModelType:
-        """创建对象"""
+        """Create a new entity."""
         ...
 
     async def get_by_id(self, id: str) -> Optional[ModelType]:
-        """根据ID获取对象"""
+        """Retrieve an entity by identifier."""
         ...
 
     async def get_multi(
@@ -49,24 +49,24 @@ class CRUDRepository(Protocol[ModelType, CreateSchemaType, UpdateSchemaType]):
         limit: int = 100,
         sort: Optional[Union[str, List[str]]] = None
     ) -> List[ModelType]:
-        """获取多个对象"""
+        """Retrieve multiple entities with optional filtering."""
         ...
 
     async def update(self, id: str, obj: UpdateSchemaType, **kwargs) -> Optional[ModelType]:
-        """更新对象"""
+        """Update an entity."""
         ...
 
     async def delete(self, id: str) -> bool:
-        """删除对象"""
+        """Delete an entity."""
         ...
 
     async def count(self, filters: Optional[QueryFilter] = None) -> int:
-        """计算对象数量"""
+        """Count entities matching the filter."""
         ...
 
 
 class StorageService(Protocol):
-    """存储服务协议"""
+    """Protocol describing object storage capabilities."""
 
     async def upload_file(
         self,
@@ -75,7 +75,7 @@ class StorageService(Protocol):
         file_path: Union[str, Path],
         metadata: Optional[Dict[str, str]] = None
     ) -> str:
-        """上传文件"""
+        """Upload a file and return object identifier."""
         ...
 
     async def download_file(
@@ -84,11 +84,11 @@ class StorageService(Protocol):
         object_name: str,
         file_path: Union[str, Path]
     ) -> bool:
-        """下载文件"""
+        """Download a file to the given path."""
         ...
 
     async def delete_file(self, bucket_name: str, object_name: str) -> bool:
-        """删除文件"""
+        """Delete an object from storage."""
         ...
 
     async def get_file_url(
@@ -97,7 +97,7 @@ class StorageService(Protocol):
         object_name: str,
         expires: int = 3600
     ) -> str:
-        """获取文件URL"""
+        """Return a signed URL for the object."""
         ...
 
     async def list_files(
@@ -106,27 +106,27 @@ class StorageService(Protocol):
         prefix: Optional[str] = None,
         max_keys: int = 1000
     ) -> List[Dict[str, Any]]:
-        """列出文件"""
+        """List objects within a prefix."""
         ...
 
     async def file_exists(self, bucket_name: str, object_name: str) -> bool:
-        """检查文件是否存在"""
+        """Return whether an object exists."""
         ...
 
 
 class YOLOValidatorService(Protocol):
-    """YOLO验证服务协议"""
+    """Protocol describing YOLO dataset validation services."""
 
     async def validate_dataset(
         self,
         dataset_path: Union[str, Path],
         dataset_type: str
     ) -> Dict[str, Any]:
-        """验证数据集"""
+        """Validate dataset and return detailed result."""
         ...
 
     def get_supported_types(self) -> List[str]:
-        """获取支持的数据集类型"""
+        """Return supported dataset types."""
         ...
 
     async def validate_single_annotation(
@@ -134,39 +134,39 @@ class YOLOValidatorService(Protocol):
         annotation_path: Union[str, Path],
         dataset_type: str
     ) -> Dict[str, Any]:
-        """验证单个标注文件"""
+        """Validate a single annotation file."""
         ...
 
 
 class ProgressTracker(Protocol):
-    """进度追踪器协议"""
+    """Protocol for tracking asynchronous task progress."""
 
     async def start_task(self, task_id: str, task_type: str, total_steps: int) -> None:
-        """开始任务"""
+        """Begin tracking a task."""
         ...
 
     async def update_progress(self, task_id: str, current_step: int, message: str = "") -> None:
-        """更新进度"""
+        """Update task progress."""
         ...
 
     async def complete_task(self, task_id: str, success: bool = True, message: str = "") -> None:
-        """完成任务"""
+        """Mark task completion."""
         ...
 
     def get_progress(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """获取进度信息"""
+        """Fetch progress information for a task."""
         ...
 
     def get_active_tasks(self) -> List[str]:
-        """获取活跃任务列表"""
+        """Return identifiers for active tasks."""
         ...
 
 
 class CacheService(Protocol):
-    """缓存服务协议"""
+    """Protocol describing cache storage operations."""
 
     async def get(self, key: str, default: Any = None) -> Any:
-        """获取缓存值"""
+        """Retrieve a cached value."""
         ...
 
     async def set(
@@ -175,24 +175,24 @@ class CacheService(Protocol):
         value: Any,
         ttl: Optional[int] = None
     ) -> bool:
-        """设置缓存值"""
+        """Store a value in cache."""
         ...
 
     async def delete(self, key: str) -> bool:
-        """删除缓存值"""
+        """Delete a cached key."""
         ...
 
     async def exists(self, key: str) -> bool:
-        """检查键是否存在"""
+        """Return whether a key exists in cache."""
         ...
 
     async def clear_pattern(self, pattern: str) -> int:
-        """清除匹配模式的键"""
+        """Remove keys matching the supplied pattern."""
         ...
 
 
 class MessageQueueService(Protocol):
-    """消息队列服务协议"""
+    """Protocol for message queue interactions."""
 
     async def publish(
         self,
@@ -200,7 +200,7 @@ class MessageQueueService(Protocol):
         routing_key: str,
         message: Dict[str, Any]
     ) -> bool:
-        """发布消息"""
+        """Publish a message to an exchange."""
         ...
 
     async def subscribe(
@@ -210,67 +210,67 @@ class MessageQueueService(Protocol):
         routing_key: str,
         handler: callable
     ) -> None:
-        """订阅消息"""
+        """Subscribe a handler to a queue/exchange."""
         ...
 
     async def unsubscribe(self, queue: str) -> None:
-        """取消订阅"""
+        """Remove a subscription."""
         ...
 
 
 class ConfigurationService(Protocol):
-    """配置服务协议"""
+    """Protocol for configuration retrieval and persistence."""
 
     def get(self, key: str, default: Any = None) -> Any:
-        """获取配置值"""
+        """Fetch configuration value."""
         ...
 
     def set(self, key: str, value: Any) -> bool:
-        """设置配置值"""
+        """Persist configuration value."""
         ...
 
     def update(self, config_dict: Dict[str, Any]) -> None:
-        """批量更新配置"""
+        """Bulk update configuration entries."""
         ...
 
     def validate_config(self, config_dict: Dict[str, Any]) -> Dict[str, List[str]]:
-        """验证配置"""
+        """Validate configuration payload."""
         ...
 
 
 class EventPublisher(Protocol):
-    """事件发布器协议"""
+    """Protocol for event publishing systems."""
 
     async def publish_event(self, event_type: str, data: Dict[str, Any]) -> None:
-        """发布事件"""
+        """Publish a single event."""
         ...
 
     async def publish_batch(self, events: List[Dict[str, Any]]) -> None:
-        """批量发布事件"""
+        """Publish a batch of events."""
         ...
 
     def subscribe(self, event_type: str, handler: callable) -> None:
-        """订阅事件"""
+        """Subscribe a handler to an event type."""
         ...
 
     def unsubscribe(self, event_type: str, handler: callable) -> None:
-        """取消订阅"""
+        """Remove an event subscription."""
         ...
 
 
 class ValidationService(Protocol):
-    """验证服务协议"""
+    """Protocol for validating files and annotations."""
 
     async def validate_file(self, file_path: Union[str, Path]) -> Dict[str, Any]:
-        """验证文件"""
+        """Validate a file."""
         ...
 
     async def validate_image(self, image_path: Union[str, Path]) -> Dict[str, Any]:
-        """验证图像"""
+        """Validate an image."""
         ...
 
     async def validate_yaml(self, yaml_path: Union[str, Path]) -> Dict[str, Any]:
-        """验证YAML配置"""
+        """Validate a YAML configuration."""
         ...
 
     async def validate_annotations(
@@ -278,36 +278,36 @@ class ValidationService(Protocol):
         annotation_path: Union[str, Path],
         dataset_type: str
     ) -> Dict[str, Any]:
-        """验证标注文件"""
+        """Validate annotation file payload."""
         ...
 
 
 class MonitoringService(Protocol):
-    """监控服务协议"""
+    """Protocol for metrics/monitoring backends."""
 
     def record_metric(self, metric_name: str, value: float, tags: Optional[Dict[str, str]] = None) -> None:
-        """记录指标"""
+        """Record a gauge metric."""
         ...
 
     def start_timer(self, operation_name: str) -> Any:
-        """开始计时"""
+        """Start a timer context for an operation."""
         ...
 
     def increment_counter(self, counter_name: str, value: int = 1, tags: Optional[Dict[str, str]] = None) -> None:
-        """增加计数器"""
+        """Increment a counter metric."""
         ...
 
     def record_histogram(self, histogram_name: str, value: float, tags: Optional[Dict[str, str]] = None) -> None:
-        """记录直方图"""
+        """Record a histogram sample."""
         ...
 
     async def health_check(self) -> Dict[str, Any]:
-        """健康检查"""
+        """Return health-check information."""
         ...
 
 
 class EmailService(Protocol):
-    """邮件服务协议"""
+    """Protocol for sending transactional/bulk email."""
 
     async def send_email(
         self,
@@ -317,7 +317,7 @@ class EmailService(Protocol):
         html_body: Optional[str] = None,
         attachments: Optional[List[Dict[str, Any]]] = None
     ) -> bool:
-        """发送邮件"""
+        """Send a single email."""
         ...
 
     async def send_bulk_email(
@@ -327,12 +327,12 @@ class EmailService(Protocol):
         body: str,
         html_body: Optional[str] = None
     ) -> Dict[str, List[str]]:
-        """批量发送邮件"""
+        """Send emails in bulk; return per-recipient status."""
         ...
 
 
 class TaskSchedulerService(Protocol):
-    """任务调度器协议"""
+    """Protocol for scheduling recurring/deferred tasks."""
 
     async def schedule_task(
         self,
@@ -342,24 +342,24 @@ class TaskSchedulerService(Protocol):
         handler: callable,
         kwargs: Optional[Dict[str, Any]] = None
     ) -> bool:
-        """调度任务"""
+        """Schedule a task for execution."""
         ...
 
     async def cancel_task(self, task_id: str) -> bool:
-        """取消任务"""
+        """Cancel a scheduled task."""
         ...
 
     def get_task_status(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """获取任务状态"""
+        """Return status for a scheduled task."""
         ...
 
     def list_tasks(self, task_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        """列出任务"""
+        """List scheduled tasks, optionally filtered by type."""
         ...
 
 
 class SearchService(Protocol):
-    """搜索服务协议"""
+    """Protocol for search-index operations."""
 
     async def index_document(
         self,
@@ -367,7 +367,7 @@ class SearchService(Protocol):
         document_id: str,
         document: Dict[str, Any]
     ) -> bool:
-        """索引文档"""
+        """Index or upsert a search document."""
         ...
 
     async def search(
@@ -379,20 +379,20 @@ class SearchService(Protocol):
         limit: int = 10,
         offset: int = 0
     ) -> Dict[str, Any]:
-        """搜索文档"""
+        """Execute a search query."""
         ...
 
     async def delete_index(self, collection: str, document_id: str) -> bool:
-        """删除索引"""
+        """Delete a document from the index."""
         ...
 
     async def reindex_collection(self, collection: str) -> bool:
-        """重建索引"""
+        """Rebuild a collection index."""
         ...
 
 
 class NotificationService(Protocol):
-    """通知服务协议"""
+    """Protocol for sending notifications to users."""
 
     async def send_notification(
         self,
@@ -402,7 +402,7 @@ class NotificationService(Protocol):
         notification_type: str = "info",
         data: Optional[Dict[str, Any]] = None
     ) -> bool:
-        """发送通知"""
+        """Send a notification to a user."""
         ...
 
     async def send_bulk_notification(
@@ -412,7 +412,7 @@ class NotificationService(Protocol):
         message: str,
         notification_type: str = "info"
     ) -> Dict[str, List[str]]:
-        """批量发送通知"""
+        """Send notifications to multiple users."""
         ...
 
     async def get_user_notifications(
@@ -421,16 +421,16 @@ class NotificationService(Protocol):
         limit: int = 50,
         unread_only: bool = False
     ) -> List[Dict[str, Any]]:
-        """获取用户通知"""
+        """Fetch notifications for a user."""
         ...
 
     async def mark_as_read(self, notification_id: str) -> bool:
-        """标记为已读"""
+        """Mark a notification as read."""
         ...
 
 
 class AuditService(Protocol):
-    """审计服务协议"""
+    """Protocol for audit logging backends."""
 
     async def log_action(
         self,
@@ -441,7 +441,7 @@ class AuditService(Protocol):
         details: Optional[Dict[str, Any]] = None,
         ip_address: Optional[str] = None
     ) -> bool:
-        """记录操作日志"""
+        """Log an audited action."""
         ...
 
     async def get_audit_log(
@@ -450,7 +450,7 @@ class AuditService(Protocol):
         limit: int = 100,
         offset: int = 0
     ) -> List[Dict[str, Any]]:
-        """获取审计日志"""
+        """Query audit log entries."""
         ...
 
     async def export_audit_log(
@@ -458,5 +458,5 @@ class AuditService(Protocol):
         filters: Optional[Dict[str, Any]] = None,
         format: str = "json"
     ) -> str:
-        """导出审计日志"""
+        """Export audit logs in the requested format."""
         ...

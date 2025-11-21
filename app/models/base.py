@@ -14,7 +14,7 @@ T = TypeVar('T')
 
 @runtime_checkable
 class DatabaseModel(Protocol):
-    """数据库模型协议"""
+    """Protocol implemented by persisted models."""
     id: Any
 
 
@@ -52,14 +52,14 @@ class PyObjectId(ObjectId):
 
 
 class TimestampMixin(BaseModel):
-    """时间戳混入类"""
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="创建时间")
-    updated_at: datetime = Field(default_factory=datetime.utcnow, description="更新时间")
+    """Mixin that automatically manages created/updated timestamps."""
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Created at")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last updated at")
 
     @model_validator(mode='before')
     @classmethod
     def set_timestamps(cls, values):
-        """设置时间戳"""
+        """Populate timestamp fields when absent."""
         current_time = datetime.utcnow()
         if isinstance(values, dict):
             if 'created_at' not in values:
@@ -69,22 +69,22 @@ class TimestampMixin(BaseModel):
 
 
 class AuditMixin(BaseModel):
-    """审计混入类"""
-    created_by: str = Field(description="创建者")
-    updated_by: str = Field(description="最后更新者")
+    """Mixin that stores creator/updater identifiers."""
+    created_by: str = Field(description="Created by user id")
+    updated_by: str = Field(description="Updated by user id")
 
     @model_validator(mode='before')
     @classmethod
     def set_audit_info(cls, values):
-        """设置审计信息"""
+        """Populate audit fields when missing."""
         if isinstance(values, dict) and 'created_by' not in values:
-            # 这里应该从认证上下文中获取用户信息
+            # This should pull from authentication context in real usage
             values['created_by'] = values.get('updated_by', 'system')
         return values
 
 
 class StatusEnum(str, Enum):
-    """状态枚举"""
+    """Common status enumeration shared by models."""
     ACTIVE = "active"
     INACTIVE = "inactive"
     PENDING = "pending"
@@ -94,7 +94,7 @@ class StatusEnum(str, Enum):
 
 
 class BaseDBModel(BaseModel):
-    """基础数据库模型"""
+    """Common base class for persisted MongoDB models."""
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -105,17 +105,17 @@ class BaseDBModel(BaseModel):
         }
     )
 
-    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id", description="数据库ID")
-    status: StatusEnum = Field(default=StatusEnum.ACTIVE, description="状态")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="创建时间")
-    updated_at: datetime = Field(default_factory=datetime.utcnow, description="更新时间")
-    created_by: str = Field(description="创建者")
-    updated_by: str = Field(description="最后更新者")
+    id: PyObjectId = Field(default_factory=PyObjectId, alias="_id", description="Database identifier")
+    status: StatusEnum = Field(default=StatusEnum.ACTIVE, description="Record status")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation time")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last modification time")
+    created_by: str = Field(description="Creator user id")
+    updated_by: str = Field(description="Updater user id")
 
     @field_validator("id", mode="before")
     @classmethod
     def validate_object_id(cls, v):
-        """验证并转换ObjectId"""
+        """Validate and coerce values into ObjectId."""
         if v is None:
             return PyObjectId()
         if isinstance(v, ObjectId):
@@ -129,18 +129,18 @@ class BaseDBModel(BaseModel):
     @field_validator("updated_at", mode="before")
     @classmethod
     def update_timestamp(cls, v, info):
-        """自动更新修改时间"""
-        # 如果是更新操作，自动设置updated_at
+        """Ensure updated_at reflects the latest mutation."""
+        # When updating, automatically set updated_at
         if info.data and 'id' in info.data:
             return datetime.utcnow()
         return v
 
     def to_dict(self) -> dict:
-        """转换为字典格式"""
+        """Return dict representation with alias support."""
         return self.model_dump(by_alias=True)
 
     def to_mongo_dict(self) -> dict:
-        """转换为MongoDB字典格式（处理ObjectId）"""
+        """Return dict suitable for MongoDB writes, renaming id -> _id."""
         data = self.to_dict()
         if 'id' in data and data['id']:
             data['_id'] = data.pop('id')
@@ -148,41 +148,41 @@ class BaseDBModel(BaseModel):
 
     @classmethod
     def from_mongo_dict(cls, data: dict) -> 'BaseDBModel':
-        """从MongoDB字典创建模型实例"""
+        """Instantiate from MongoDB result payload."""
         if '_id' in data:
             data['id'] = data.pop('_id')
         return cls(**data)
 
 
 class PaginationQuery(BaseModel):
-    """分页查询参数"""
-    page: int = Field(default=1, ge=1, description="页码")
-    page_size: int = Field(default=20, ge=1, le=100, description="每页大小")
+    """Common pagination query parameters."""
+    page: int = Field(default=1, ge=1, description="Requested page number")
+    page_size: int = Field(default=20, ge=1, le=100, description="Results per page")
 
     @property
     def skip(self) -> int:
-        """获取跳过数量"""
+        """Return number of records to skip."""
         return (self.page - 1) * self.page_size
 
     @property
     def limit(self) -> int:
-        """获取限制数量"""
+        """Return limit for query."""
         return self.page_size
 
 
 class PaginationResult(BaseModel, Generic[T]):
-    """分页结果"""
-    items: list[T] = Field(description="数据项列表")
-    total: int = Field(description="总数量")
-    page: int = Field(description="当前页码")
-    page_size: int = Field(description="每页大小")
-    total_pages: int = Field(description="总页数")
-    has_next: bool = Field(description="是否有下一页")
-    has_prev: bool = Field(description="是否有上一页")
+    """Standard paginated response payload."""
+    items: list[T] = Field(description="Items on the current page")
+    total: int = Field(description="Total item count")
+    page: int = Field(description="Current page number")
+    page_size: int = Field(description="Items per page")
+    total_pages: int = Field(description="Total number of pages")
+    has_next: bool = Field(description="Whether a next page exists")
+    has_prev: bool = Field(description="Whether a previous page exists")
 
     @model_validator(mode='after')
     def validate_pagination(self):
-        """验证分页参数"""
+        """Validate pagination invariants."""
         if self.page < 1:
             raise ValidationException("Page must be >= 1")
         if self.page_size < 1:
@@ -199,7 +199,7 @@ class PaginationResult(BaseModel, Generic[T]):
         page: int,
         page_size: int
     ) -> 'PaginationResult[T]':
-        """创建分页结果"""
+        """Factory helper for building paginated responses."""
         total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
         return cls(
@@ -214,42 +214,42 @@ class PaginationResult(BaseModel, Generic[T]):
 
 
 class ErrorResponse(BaseModel):
-    """错误响应模型"""
-    error_code: str = Field(description="错误代码")
-    message: str = Field(description="错误消息")
-    details: dict = Field(default_factory=dict, description="错误详情")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="时间戳")
-    request_id: str = Field(description="请求ID")
+    """Standard error response schema."""
+    error_code: str = Field(description="Application-specific error code")
+    message: str = Field(description="Human-readable error message")
+    details: dict = Field(default_factory=dict, description="Additional error context")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Time error was generated")
+    request_id: str = Field(description="Request correlation identifier")
 
 
 class SuccessResponse(BaseModel, Generic[T]):
-    """成功响应模型"""
-    data: T = Field(description="响应数据")
-    message: str = Field(default="Success", description="响应消息")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="时间戳")
-    request_id: str = Field(description="请求ID")
+    """Standard success response wrapper."""
+    data: T = Field(description="Payload data")
+    message: str = Field(default="Success", description="Success message")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Response timestamp")
+    request_id: str = Field(description="Request correlation identifier")
 
 
 class ModelFactory:
-    """模型工厂类"""
+    """Registry for resolving models by name."""
 
     _model_registry: dict[str, type] = {}
 
     @classmethod
     def register_model(cls, model_name: str, model_class: type):
-        """注册模型类"""
+        """Register a model class."""
         cls._model_registry[model_name] = model_class
 
     @classmethod
     def get_model(cls, model_name: str) -> type:
-        """获取模型类"""
+        """Retrieve a registered model class."""
         if model_name not in cls._model_registry:
             raise ValueError(f"Model {model_name} not registered")
         return cls._model_registry[model_name]
 
     @classmethod
     def create_model(cls, model_name: str, **kwargs) -> DatabaseModel:
-        """创建模型实例"""
+        """Instantiate a registered model."""
         model_class = cls.get_model(model_name)
         return model_class(**kwargs)
 

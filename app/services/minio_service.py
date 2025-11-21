@@ -1,4 +1,4 @@
-"""优化的MinIO服务，支持异步操作、连接池、进度追踪、分片上传、断点续传等功能"""
+"""Optimized MinIO service supporting async ops, connection pooling, progress tracking, chunked uploads, and resumable sessions."""
 import asyncio
 import logging
 import os
@@ -18,13 +18,13 @@ logger: logging.Logger = get_logger(__name__)
 
 
 class MinioService:
-    """优化的MinIO服务类"""
+    """Optimized MinIO service wrapper."""
 
     def __init__(self):
-        """初始化MinIO服务"""
+        """Initialize MinIO service dependencies."""
         logger.info(f"Initializing optimized MinIO service")
 
-        # 初始化同步MinIO客户端（用于不支持异步的操作）
+        # Initialize sync MinIO client (used when async operations are unavailable)
         self.sync_client = Minio(
             settings.minio_endpoint,
             access_key=settings.minio_access_key,
@@ -33,22 +33,22 @@ class MinioService:
         )
 
         self.bucket_name = settings.minio_bucket_name
-        self.chunk_size = 100 * 1024 * 1024  # 100MB分片大小
-        self.max_workers = 20  # 最大并发数
-        self.max_retries = 3  # 最大重试次数
-        self.retry_delay = 1.0  # 重试延迟
-        self.connection_pool_size = 100  # 连接池大小
+        self.chunk_size = 100 * 1024 * 1024  # Default chunk size: 100 MB
+        self.max_workers = 20  # Default concurrency level
+        self.max_retries = 3  # Default retry attempts
+        self.retry_delay = 1.0  # Base retry delay
+        self.connection_pool_size = 100  # HTTP connection pool size
 
-        # 确保bucket存在
+        # Ensure primary bucket exists
         self._ensure_bucket_exists()
 
-        # 上传会话存储
+        # Track upload sessions locally
         self.upload_sessions = {}
 
         logger.info("Optimized MinIO service initialized successfully")
 
     def _ensure_bucket_exists(self) -> None:
-        """确保bucket存在"""
+        """Create the target bucket if it does not already exist."""
         try:
             if not self.sync_client.bucket_exists(self.bucket_name):
                 logger.info(f"Creating MinIO bucket: {self.bucket_name}")
@@ -69,17 +69,17 @@ class MinioService:
         bucket_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        异步上传文件（支持进度追踪和分片上传）
+        Upload a file asynchronously with progress tracking and chunked support.
 
         Args:
-            file_path: 本地文件路径
-            object_name: MinIO中的对象名称
-            content_type: MIME类型
-            progress_callback: 进度回调函数
-            bucket_name: bucket名称（可选）
+            file_path: Local file path.
+            object_name: Object name in MinIO.
+            content_type: MIME type of the file.
+            progress_callback: Optional progress callback.
+            bucket_name: Optional bucket override.
 
         Returns:
-            上传结果字典
+            dict summarizing upload result.
         """
         bucket = bucket_name or self.bucket_name
 
@@ -100,10 +100,10 @@ class MinioService:
             retry_delay=self.retry_delay,
             connection_pool_size=self.connection_pool_size
         ) as client:
-            # 确保bucket存在
+            # Ensure target bucket exists
             await client.ensure_bucket_exists(bucket)
 
-            # 上传文件
+            # Perform upload
             result = await client.upload_file_with_progress(
                 file_path=file_path,
                 bucket_name=bucket,
@@ -131,15 +131,15 @@ class MinioService:
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
     ) -> Dict[str, Any]:
         """
-        异步并行上传多个文件
+        Upload multiple files concurrently using the async client.
 
         Args:
-            files: 文件信息列表
-            bucket_name: bucket名称
-            progress_callback: 进度回调函数
+            files: List of (file_path, object_name, content_type) tuples.
+            bucket_name: Optional bucket override.
+            progress_callback: Callback invoked with progress info.
 
         Returns:
-            上传结果字典
+            dict summarizing batch upload results.
         """
         bucket = bucket_name or self.bucket_name
 
@@ -152,7 +152,7 @@ class MinioService:
                 "failed_files": []
             }
 
-        # 验证文件存在
+        # Verify each file exists before uploading
         valid_files = []
         for file_path, object_name, content_type in files:
             if os.path.exists(file_path):
@@ -176,10 +176,10 @@ class MinioService:
             retry_delay=self.retry_delay,
             connection_pool_size=self.connection_pool_size
         ) as client:
-            # 确保bucket存在
+            # Ensure target bucket exists
             await client.ensure_bucket_exists(bucket)
 
-            # 并行上传文件
+            # Upload files concurrently
             result = await client.upload_files_parallel(
                 files=valid_files,
                 bucket_name=bucket,
@@ -203,18 +203,18 @@ class MinioService:
         enable_async: bool = True
     ) -> Dict[str, Any]:
         """
-        带重试机制的文件上传（同步版本，兼容现有代码）
+        Upload a file with retry logic (sync implementation for compatibility).
 
         Args:
-            file_path: 本地文件路径
-            object_name: MinIO中的对象名称
-            content_type: MIME类型
-            max_retries: 最大重试次数
-            bucket_name: bucket名称
-            enable_async: 是否启用异步（如果文件很大）
+            file_path: Local path to the file.
+            object_name: Target MinIO object name.
+            content_type: MIME type for the object.
+            max_retries: Override for retry attempts.
+            bucket_name: Optional bucket override.
+            enable_async: Use async path automatically for large files.
 
         Returns:
-            上传结果字典
+            dict summarizing upload result.
         """
         bucket = bucket_name or self.bucket_name
         max_retries = max_retries or self.max_retries
@@ -224,9 +224,9 @@ class MinioService:
 
         file_size = os.path.getsize(file_path)
 
-        # 对于大文件，自动使用异步版本
+        # Automatically move large files to async pipeline
         if enable_async and file_size > 50 * 1024 * 1024:  # 50MB+
-            # 创建事件循环运行异步代码
+            # Create event loop if current thread lacks one
             try:
                 loop = asyncio.get_event_loop()
             except RuntimeError:
@@ -250,7 +250,7 @@ class MinioService:
             )
             return result
 
-        # 小文件使用同步上传
+        # Upload smaller files synchronously
         return self._sync_upload_with_retry(
             file_path, object_name, content_type, max_retries, bucket
         )
@@ -263,12 +263,12 @@ class MinioService:
         max_retries: int,
         bucket_name: str
     ) -> Dict[str, Any]:
-        """同步上传带重试"""
+        """Synchronous upload with retry support."""
         file_size = os.path.getsize(file_path)
 
         for attempt in range(max_retries + 1):
             try:
-                # 上传文件
+                # Perform upload
                 self.sync_client.fput_object(
                     bucket_name,
                     object_name,
@@ -286,7 +286,7 @@ class MinioService:
                     "file_path": file_path,
                     "url": url,
                     "file_size": file_size,
-                    "upload_time": None,  # 同步版本不计算时间
+                    "upload_time": None,  # Sync version does not measure duration
                     "speed_mbps": None,
                     "attempt": attempt + 1
                 }
@@ -297,7 +297,7 @@ class MinioService:
                 )
 
                 if attempt < max_retries:
-                    time.sleep(self.retry_delay * (2 ** attempt))  # 指数退避
+                    time.sleep(self.retry_delay * (2 ** attempt))  # exponential backoff
                 else:
                     logger.error(f"Upload failed after {max_retries + 1} attempts")
                     return {
@@ -321,19 +321,19 @@ class MinioService:
         enable_async: bool = True
     ) -> Dict[str, Any]:
         """
-        带进度追踪的批量文件上传
+        Batch upload files with progress tracking.
 
         Args:
-            files: 文件列表 [(file_path, object_name), ...]
-            max_workers: 最大并发数
-            max_retries: 最大重试次数
-            content_type: 默认内容类型
-            progress_callback: 进度回调函数
-            bucket_name: bucket名称
-            enable_async: 是否启用异步
+            files: List of (file_path, object_name) tuples.
+            max_workers: Concurrency level for sync uploads.
+            max_retries: Retry attempts for sync path.
+            content_type: Default content type applied to sync uploads.
+            progress_callback: Optional callback for progress metrics.
+            bucket_name: Optional bucket override.
+            enable_async: Whether to leverage async path for large files.
 
         Returns:
-            上传结果字典
+            dict summarizing upload outcomes.
         """
         bucket = bucket_name or self.bucket_name
         max_workers = max_workers or self.max_workers
@@ -350,14 +350,14 @@ class MinioService:
                 "retry_info": {"total_retries": 0, "retry_attempts": []}
             }
 
-        # 分类文件：小文件用同步，大文件用异步
+        # Dispatch small files to sync path, large files to async path
         small_files = []
         large_files = []
 
         for file_path, object_name in files:
             if os.path.exists(file_path):
                 file_size = os.path.getsize(file_path)
-                if file_size > 50 * 1024 * 1024:  # 大于50MB
+                if file_size > 50 * 1024 * 1024:  # Larger than 50 MB
                     large_files.append((file_path, object_name, content_type))
                 else:
                     small_files.append((file_path, object_name, content_type))
@@ -368,7 +368,7 @@ class MinioService:
         success_list = []
         failed_list = []
 
-        # 处理小文件（同步并发）
+        # Handle small files via synchronous concurrent uploads
         if small_files:
             logger.info(f"Processing {len(small_files)} small files with sync upload")
 
@@ -396,11 +396,11 @@ class MinioService:
                     if progress_callback:
                         progress_callback(result)
 
-        # 处理大文件（异步）
+        # Handle large files via async path
         if large_files:
             logger.info(f"Processing {len(large_files)} large files with async upload")
 
-            # 异步上传大文件
+            # Fire async uploads for large files
             try:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -417,7 +417,7 @@ class MinioService:
                     )
                 )
 
-                # 合并结果
+                # Merge async results into summary
                 results.extend(async_result["successful_files"])
                 results.extend(async_result["failed_files"])
                 success_list.extend([r["object_name"] for r in async_result["successful_files"]])
@@ -438,7 +438,7 @@ class MinioService:
             "failed_list": failed_list,
             "small_files_count": len(small_files),
             "large_files_count": len(large_files),
-            "retry_info": {"total_retries": 0, "retry_attempts": []}  # 重试已在内部处理
+            "retry_info": {"total_retries": 0, "retry_attempts": []}  # Retries handled internally
         }
 
         logger.info(
@@ -455,16 +455,16 @@ class MinioService:
         session_id: Optional[str] = None
     ) -> str:
         """
-        启动分片上传会话（用于断点续传）
+        Start a multipart upload session (for resumable uploads).
 
         Args:
-            file_path: 文件路径
-            object_name: 对象名称
-            bucket_name: bucket名称
-            session_id: 会话ID（可选）
+            file_path: Local path to the file.
+            object_name: Target object name.
+            bucket_name: Optional bucket override.
+            session_id: Optional predefined session id.
 
         Returns:
-            会话ID
+            session id for tracking/resume.
         """
         bucket = bucket_name or self.bucket_name
 
@@ -491,16 +491,16 @@ class MinioService:
         ) as client:
             await client.ensure_bucket_exists(bucket)
 
-            # 启动分片上传
+            # Initialize upload (placeholder, currently delegates to async uploader)
             result = await client.upload_file_with_progress(
                 file_path=file_path,
                 bucket_name=bucket,
                 object_name=object_name,
-                progress_callback=None  # 不显示进度，用于初始化会话
+                progress_callback=None  # hide progress, initialization only
             )
 
             if result["success"]:
-                # 保存会话信息
+                # Persist session metadata in memory
                 self.upload_sessions[session_id] = {
                     "bucket_name": bucket,
                     "object_name": object_name,
@@ -510,7 +510,7 @@ class MinioService:
                     "result": result
                 }
 
-                # 保存会话到文件
+                # Persist session metadata to disk for recovery
                 session_file = f"/tmp/upload_session_{session_id.replace('/', '_')}.json"
                 client.save_upload_session(session_id, session_file)
 
@@ -525,17 +525,17 @@ class MinioService:
         progress_callback: Optional[Callable[[UploadProgress], None]] = None
     ) -> Dict[str, Any]:
         """
-        恢复上传会话
+        Resume a previously started upload session.
 
         Args:
-            session_id: 会话ID
-            progress_callback: 进度回调函数
+            session_id: Upload session identifier.
+            progress_callback: Optional progress callback.
 
         Returns:
-            上传结果
+            dict summarizing resumed upload result.
         """
         if session_id not in self.upload_sessions:
-            # 尝试从文件加载会话
+            # Attempt to load session metadata from disk
             session_file = f"/tmp/upload_session_{session_id.replace('/', '_')}.json"
 
             async with AsyncMinioClient(
@@ -571,12 +571,12 @@ class MinioService:
             result = await client.resume_upload(session_id)
 
             if result["success"]:
-                # 更新会话状态
+                # Update in-memory session state
                 session["status"] = "completed"
                 session["completed_at"] = time.time()
                 session["result"] = result
 
-                # 清理会话文件
+                # Remove persisted session file
                 session_file = f"/tmp/upload_session_{session_id.replace('/', '_')}.json"
                 try:
                     os.remove(session_file)
@@ -592,7 +592,7 @@ class MinioService:
             return result
 
     def get_upload_session_status(self, session_id: str) -> Optional[Dict[str, Any]]:
-        """获取上传会话状态"""
+        """Return metadata for a stored upload session."""
         session = self.upload_sessions.get(session_id)
         if session:
             return {
@@ -607,7 +607,7 @@ class MinioService:
         return None
 
     def cleanup_completed_sessions(self, max_age_hours: int = 24) -> int:
-        """清理已完成的会话"""
+        """Remove completed/failed sessions older than the given age."""
         current_time = time.time()
         max_age_seconds = max_age_hours * 3600
 
@@ -620,7 +620,7 @@ class MinioService:
 
         for session_id in sessions_to_remove:
             del self.upload_sessions[session_id]
-            # 清理会话文件
+            # Remove persisted session file
             session_file = f"/tmp/upload_session_{session_id.replace('/', '_')}.json"
             try:
                 os.remove(session_file)
@@ -630,9 +630,9 @@ class MinioService:
         logger.info(f"Cleaned up {len(sessions_to_remove)} old sessions")
         return len(sessions_to_remove)
 
-    # 保持向后兼容的同步方法
+    # Backwards-compatible synchronous helpers
     def upload_file(self, file_path: str, object_name: str, content_type: str = "application/octet-stream") -> str:
-        """上传文件（同步版本，向后兼容）"""
+        """Synchronous wrapper maintained for backwards compatibility."""
         result = self.upload_file_with_retry(file_path, object_name, content_type)
 
         if not result["success"]:
@@ -641,7 +641,7 @@ class MinioService:
         return f"http://{settings.minio_endpoint}/{self.bucket_name}/{object_name}"
 
     def get_file_url(self, object_name: str) -> str:
-        """获取预签名URL（同步版本）"""
+        """Generate a presigned URL (sync version)."""
         try:
             url = self.sync_client.presigned_get_object(self.bucket_name, object_name)
             return url
@@ -650,7 +650,7 @@ class MinioService:
             raise Exception(f"Failed to generate URL: {e}")
 
     def delete_file(self, object_name: str) -> bool:
-        """删除文件（同步版本）"""
+        """Delete an object (sync helper)."""
         try:
             self.sync_client.remove_object(self.bucket_name, object_name)
             logger.info(f"File deleted successfully: {object_name}")
@@ -660,7 +660,7 @@ class MinioService:
             return False
 
     def file_exists(self, object_name: str) -> bool:
-        """检查文件是否存在（同步版本）"""
+        """Check whether an object exists (sync helper)."""
         try:
             self.sync_client.stat_object(self.bucket_name, object_name)
             return True
@@ -677,39 +677,39 @@ class MinioService:
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
     ) -> Dict[str, Any]:
         """
-        批量上传文件（向后兼容版本，自动选择最优策略）
+        Backwards-compatible batch upload helper that auto-selects best strategy.
 
         Args:
-            file_list: 文件列表 [(file_path, object_name), ...]
-            max_workers: 最大并发数
-            max_retries: 最大重试次数
-            retry_delay: 重试延迟
-            content_type: 默认内容类型
-            progress_callback: 进度回调函数
+            file_list: List of (file_path, object_name) tuples.
+            max_workers: Worker count for sync uploads.
+            max_retries: Retry attempts for sync path.
+            retry_delay: Delay used between retries.
+            content_type: Default MIME type for sync uploads.
+            progress_callback: Optional callback for tracking progress.
 
         Returns:
-            上传结果字典
+            dict summarizing upload result.
         """
-        # 使用新的优化版本
+        # Delegate to optimized implementation
         return self.upload_files_with_progress(
             files=file_list,
             max_workers=max_workers,
             max_retries=max_retries,
             content_type=content_type,
             progress_callback=progress_callback,
-            enable_async=True  # 启用异步优化
+            enable_async=True  # use async optimization when helpful
         )
 
     def get_files_urls(self, object_names: List[str], max_workers: int = 20) -> Dict[str, Any]:
         """
-        批量获取URL（同步版本，向后兼容）
+        Retrieve presigned URLs in bulk (sync helper).
 
         Args:
-            object_names: 对象名称列表
-            max_workers: 最大并发数
+            object_names: Names of objects to fetch.
+            max_workers: Worker count for the thread pool.
 
         Returns:
-            结果字典
+            dict of URL results.
         """
         if not object_names:
             return {
@@ -771,9 +771,9 @@ class MinioService:
 
         return summary
 
-    # 性能监控方法
+    # Performance helpers
     def get_performance_stats(self) -> Dict[str, Any]:
-        """获取性能统计信息"""
+        """Return current performance-related settings."""
         return {
             "chunk_size": self.chunk_size,
             "max_workers": self.max_workers,
@@ -793,7 +793,7 @@ class MinioService:
         retry_delay: float = None,
         connection_pool_size: int = None
     ):
-        """更新性能配置"""
+        """Update runtime performance configuration."""
         if chunk_size:
             self.chunk_size = chunk_size
         if max_workers:
@@ -808,5 +808,5 @@ class MinioService:
         logger.info("Performance configuration updated")
 
 
-# 全局优化后的MinIO服务实例
+# Global optimized MinIO service instance
 minio_service = MinioService()

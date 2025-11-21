@@ -1,4 +1,8 @@
-"""YOLO format validation and parsing service - 改进版本，使用现代Python特性."""
+"""YOLO Format Validation and Parsing Service
+Uses modern Python features (dataclasses, asyncio, Protocol) while maintaining backward compatibility.
+Handles validation and parsing for multiple YOLO dataset types (detect, segment, pose, obb, classify).
+"""
+
 import asyncio
 import hashlib
 import json
@@ -13,31 +17,33 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
 
 import yaml
 
+# Project internal imports (sorted by module)
 from app.core.exceptions import (
     FileNotFoundException,
     YOLODatasetTypeException,
     YOLOValidationException,
 )
 
-# from app.core.decorators import exception_handler, performance_monitor, cache_result, async_exception_handler  # 避免循环导入
+# from app.core.decorators import exception_handler, performance_monitor, cache_result, async_exception_handler  # Avoid circular import
 from app.utils.file_utils import resolve_target_directory
 from app.utils.logger import get_logger
+
 
 logger: logging.Logger = get_logger(__name__)
 
 
 class DatasetType(Enum):
-    """数据集类型枚举"""
-    DETECT = "detect"
-    SEGMENT = "segment"
-    POSE = "pose"
-    OBB = "obb"
-    CLASSIFY = "classify"
+    """Dataset type enumeration for YOLO formats."""
+    DETECT = "detect"    # Object detection
+    SEGMENT = "segment"  # Instance segmentation
+    POSE = "pose"        # Pose estimation
+    OBB = "obb"          # Oriented bounding box
+    CLASSIFY = "classify"# Image classification
 
 
 @dataclass
 class ValidationResult:
-    """验证结果数据类"""
+    """Structure to hold dataset validation outcome and metadata."""
     is_valid: bool
     message: str
     errors: List[str] = None
@@ -46,6 +52,7 @@ class ValidationResult:
     validation_time: datetime = None
 
     def __post_init__(self):
+        """Initialize optional fields with default values if not provided."""
         if self.errors is None:
             self.errors = []
         if self.warnings is None:
@@ -56,42 +63,53 @@ class ValidationResult:
 
 @dataclass
 class AnnotationInfo:
-    """标注信息数据类"""
-    annotation_type: str
-    class_id: int
-    class_name: str
-    bbox: Optional[Dict[str, float]] = None
-    points: Optional[List[float]] = None
-    keypoints: Optional[List[float]] = None
-    confidence: Optional[float] = None
-    area: Optional[float] = None
-    metadata: Dict[str, Any] = None
+    """Container for structured annotation metadata."""
+    annotation_type: str  # e.g., "detect", "segment", "pose"
+    class_id: int         # Class index from dataset YAML
+    class_name: str       # Class name corresponding to class_id
+    bbox: Optional[Dict[str, float]] = None  # Bounding box (for detect/obb)
+    points: Optional[List[float]] = None     # Polygon points (for segment)
+    keypoints: Optional[List[float]] = None  # Keypoint coordinates (for pose)
+    confidence: Optional[float] = None       # Confidence score (if available)
+    area: Optional[float] = None             # Bounding box/segment area
+    metadata: Dict[str, Any] = None          # Additional annotation metadata
 
     def __post_init__(self):
+        """Initialize optional metadata field if not provided."""
         if self.metadata is None:
             self.metadata = {}
 
 
 class YOLOAnnotationParser(ABC):
-    """YOLO标注解析器抽象基类"""
+    """Abstract base class defining interface for annotation parsers."""
 
     @abstractmethod
     async def parse(self, annotation_path: str, class_names: List[str]) -> List[AnnotationInfo]:
-        """解析标注文件"""
+        """
+        Parse annotation file into structured AnnotationInfo objects.
+        
+        Args:
+            annotation_path: Path to the annotation TXT file
+            class_names: List of class names from dataset YAML
+            
+        Returns:
+            List of structured AnnotationInfo objects
+        """
         pass
 
     @abstractmethod
     def get_format_version(self) -> str:
-        """获取格式版本"""
+        """Return the supported annotation format version."""
         pass
 
 
 class DetectAnnotationParser(YOLOAnnotationParser):
-    """检测标注解析器"""
+    """Parser for YOLO object detection annotations (normalized bbox format)."""
 
     async def parse(self, annotation_path: str, class_names: List[str]) -> List[AnnotationInfo]:
-        """解析检测标注"""
+        """Parse detection annotations (class_id + normalized x_center/y_center/width/height)."""
         annotations = []
+        annotation_path = Path(annotation_path)
 
         try:
             with open(annotation_path, 'r', encoding='utf-8') as f:
@@ -100,23 +118,28 @@ class DetectAnnotationParser(YOLOAnnotationParser):
             for line_num, line in enumerate(lines, 1):
                 line = line.strip()
                 if not line:
-                    continue
+                    continue  # Skip empty lines
 
                 parts = line.split()
                 if len(parts) < 5:
-                    logger.warning(f"Invalid detection annotation format at line {line_num}: {line}")
+                    logger.warning(f"Invalid detection annotation at line {line_num} in {annotation_path}: {line}")
                     continue
 
                 try:
                     class_id = int(parts[0])
+                    # Get class name (fallback to "class_{class_id}" if index is out of range)
                     class_name = class_names[class_id] if class_id < len(class_names) else f"class_{class_id}"
 
+                    # Parse normalized bounding box coordinates
                     x_center = float(parts[1])
                     y_center = float(parts[2])
                     width = float(parts[3])
                     height = float(parts[4])
 
-                    annotation = AnnotationInfo(
+                    # Calculate bounding box area (normalized)
+                    area = width * height
+
+                    annotations.append(AnnotationInfo(
                         annotation_type="detect",
                         class_id=class_id,
                         class_name=class_name,
@@ -126,12 +149,11 @@ class DetectAnnotationParser(YOLOAnnotationParser):
                             "width": width,
                             "height": height
                         },
-                        area=width * height
-                    )
-                    annotations.append(annotation)
+                        area=area
+                    ))
 
                 except (ValueError, IndexError) as e:
-                    logger.warning(f"Error parsing detection annotation at line {line_num}: {e}")
+                    logger.warning(f"Failed to parse detection annotation at line {line_num} in {annotation_path}: {e}")
                     continue
 
         except Exception as e:
@@ -145,11 +167,12 @@ class DetectAnnotationParser(YOLOAnnotationParser):
 
 
 class SegmentAnnotationParser(YOLOAnnotationParser):
-    """分割标注解析器"""
+    """Parser for YOLO instance segmentation annotations (polygon format)."""
 
     async def parse(self, annotation_path: str, class_names: List[str]) -> List[AnnotationInfo]:
-        """解析分割标注"""
+        """Parse segmentation annotations (class_id + normalized polygon points)."""
         annotations = []
+        annotation_path = Path(annotation_path)
 
         try:
             with open(annotation_path, 'r', encoding='utf-8') as f:
@@ -158,30 +181,30 @@ class SegmentAnnotationParser(YOLOAnnotationParser):
             for line_num, line in enumerate(lines, 1):
                 line = line.strip()
                 if not line:
-                    continue
+                    continue  # Skip empty lines
 
                 parts = line.split()
-                if len(parts) < 5:  # 至少需要class_id + x1,y1,x2,y2
-                    logger.warning(f"Invalid segment annotation format at line {line_num}: {line}")
+                # Require class_id + at least 2 points (x1,y1) to form a polygon
+                if len(parts) < 5:
+                    logger.warning(f"Invalid segment annotation at line {line_num} in {annotation_path}: {line}")
                     continue
 
                 try:
                     class_id = int(parts[0])
                     class_name = class_names[class_id] if class_id < len(class_names) else f"class_{class_id}"
 
-                    # 分割标注的点是归一化坐标
-                    points = [float(x) for x in parts[1:]]
+                    # Parse normalized polygon points (x1,y1,x2,y2,...xn,yn)
+                    points = [float(coord) for coord in parts[1:]]
 
-                    annotation = AnnotationInfo(
+                    annotations.append(AnnotationInfo(
                         annotation_type="segment",
                         class_id=class_id,
                         class_name=class_name,
                         points=points
-                    )
-                    annotations.append(annotation)
+                    ))
 
                 except (ValueError, IndexError) as e:
-                    logger.warning(f"Error parsing segment annotation at line {line_num}: {e}")
+                    logger.warning(f"Failed to parse segment annotation at line {line_num} in {annotation_path}: {e}")
                     continue
 
         except Exception as e:
@@ -195,11 +218,12 @@ class SegmentAnnotationParser(YOLOAnnotationParser):
 
 
 class PoseAnnotationParser(YOLOAnnotationParser):
-    """姿态估计标注解析器"""
+    """Parser for YOLO pose estimation annotations (keypoint format)."""
 
     async def parse(self, annotation_path: str, class_names: List[str]) -> List[AnnotationInfo]:
-        """解析姿态估计标注"""
+        """Parse pose annotations (class_id + normalized keypoint coordinates)."""
         annotations = []
+        annotation_path = Path(annotation_path)
 
         try:
             with open(annotation_path, 'r', encoding='utf-8') as f:
@@ -208,30 +232,30 @@ class PoseAnnotationParser(YOLOAnnotationParser):
             for line_num, line in enumerate(lines, 1):
                 line = line.strip()
                 if not line:
-                    continue
+                    continue  # Skip empty lines
 
                 parts = line.split()
-                if len(parts) < 3:  # 至少需要class_id + x,y
-                    logger.warning(f"Invalid pose annotation format at line {line_num}: {line}")
+                # Require class_id + at least 1 keypoint (x,y)
+                if len(parts) < 3:
+                    logger.warning(f"Invalid pose annotation at line {line_num} in {annotation_path}: {line}")
                     continue
 
                 try:
                     class_id = int(parts[0])
                     class_name = class_names[class_id] if class_id < len(class_names) else f"class_{class_id}"
 
-                    # 姿态标注的关键点坐标
-                    keypoints = [float(x) for x in parts[1:]]
+                    # Parse normalized keypoint coordinates (x1,y1,x2,y2,...xn,yn)
+                    keypoints = [float(coord) for coord in parts[1:]]
 
-                    annotation = AnnotationInfo(
+                    annotations.append(AnnotationInfo(
                         annotation_type="pose",
                         class_id=class_id,
                         class_name=class_name,
                         keypoints=keypoints
-                    )
-                    annotations.append(annotation)
+                    ))
 
                 except (ValueError, IndexError) as e:
-                    logger.warning(f"Error parsing pose annotation at line {line_num}: {e}")
+                    logger.warning(f"Failed to parse pose annotation at line {line_num} in {annotation_path}: {e}")
                     continue
 
         except Exception as e:
@@ -245,11 +269,12 @@ class PoseAnnotationParser(YOLOAnnotationParser):
 
 
 class ClassifyAnnotationParser(YOLOAnnotationParser):
-    """分类标注解析器"""
+    """Parser for YOLO image classification annotations (single class_id format)."""
 
     async def parse(self, annotation_path: str, class_names: List[str]) -> List[AnnotationInfo]:
-        """解析分类标注"""
+        """Parse classification annotations (single class_id per image)."""
         annotations = []
+        annotation_path = Path(annotation_path)
 
         try:
             with open(annotation_path, 'r', encoding='utf-8') as f:
@@ -258,7 +283,7 @@ class ClassifyAnnotationParser(YOLOAnnotationParser):
             for line_num, line in enumerate(lines, 1):
                 line = line.strip()
                 if not line:
-                    continue
+                    continue  # Skip empty lines
 
                 parts = line.split()
                 if not parts:
@@ -268,15 +293,14 @@ class ClassifyAnnotationParser(YOLOAnnotationParser):
                     class_id = int(parts[0])
                     class_name = class_names[class_id] if class_id < len(class_names) else f"class_{class_id}"
 
-                    annotation = AnnotationInfo(
+                    annotations.append(AnnotationInfo(
                         annotation_type="classify",
                         class_id=class_id,
                         class_name=class_name
-                    )
-                    annotations.append(annotation)
+                    ))
 
                 except (ValueError, IndexError) as e:
-                    logger.warning(f"Error parsing classify annotation at line {line_num}: {e}")
+                    logger.warning(f"Failed to parse classify annotation at line {line_num} in {annotation_path}: {e}")
                     continue
 
         except Exception as e:
@@ -290,45 +314,53 @@ class ClassifyAnnotationParser(YOLOAnnotationParser):
 
 
 class YOLOValidator:
-    """YOLO格式验证和解析类 - 改进版本"""
+    """Enhanced YOLO format validator and parser with multi-type support."""
 
     def __init__(self):
-        """初始化验证器"""
+        """Initialize validator with registry of dataset-specific parsers."""
+        # Get supported dataset types from DatasetType enum
         self.supported_types = [t.value for t in DatasetType]
+        
+        # Register annotation parsers (key: dataset type, value: parser instance)
         self._parsers: Dict[str, YOLOAnnotationParser] = {
             DatasetType.DETECT.value: DetectAnnotationParser(),
             DatasetType.SEGMENT.value: SegmentAnnotationParser(),
             DatasetType.POSE.value: PoseAnnotationParser(),
             DatasetType.CLASSIFY.value: ClassifyAnnotationParser(),
-            # OBB解析器可以后续添加
+            # OBB parser can be added later (e.g., ObbAnnotationParser())
         }
 
     async def validate_dataset(self, dataset_path: str, dataset_type: str) -> ValidationResult:
         """
-        验证YOLO数据集格式
-
+        Validate YOLO dataset format and structure.
+        
         Args:
-            dataset_path: 数据集目录路径
-            dataset_type: 数据集类型
-
+            dataset_path: Path to the root directory of the dataset
+            dataset_type: Type of dataset to validate (must be in supported_types)
+            
         Returns:
-            ValidationResult: 验证结果
+            ValidationResult object containing validation outcome and metadata
+            
+        Raises:
+            YOLODatasetTypeException: If dataset_type is unsupported
+            FileNotFoundException: If dataset_path does not exist
+            YOLOValidationException: If validation fails unexpectedly
         """
-        logger.info(f"Validating YOLO dataset: {dataset_path} (type: {dataset_type})")
+        logger.info(f"Starting YOLO dataset validation: {dataset_path} (type: {dataset_type})")
 
-        # 验证数据集类型
+        # Validate dataset type is supported
         if dataset_type not in self.supported_types:
             raise YOLODatasetTypeException(
-                f"Unsupported dataset type: {dataset_type}",
+                f"Unsupported dataset type: {dataset_type}. Supported types: {', '.join(self.supported_types)}",
                 dataset_type=dataset_type
             )
 
-        # 验证路径存在
+        # Validate dataset path exists
         dataset_path = Path(dataset_path)
         if not dataset_path.exists():
-            raise FileNotFoundException(str(dataset_path))
+            raise FileNotFoundException(f"Dataset directory not found: {dataset_path}")
 
-        # 执行验证
+        # Execute validation tasks concurrently (only ultralytics check enabled by default)
         try:
             validation_tasks = [
                 self._validate_from_ultralytics_lib(dataset_path, dataset_type),
@@ -338,102 +370,141 @@ class YOLOValidator:
                 # self._validate_images(dataset_path, dataset_type)
             ]
 
+            # Run tasks concurrently and collect results (including exceptions)
             results = await asyncio.gather(*validation_tasks, return_exceptions=True)
 
-            # 合并验证结果
-            all_errors = []
-            all_warnings = []
-            dataset_info = {}
+            # Combine results from all validation tasks
+            all_errors: List[str] = []
+            all_warnings: List[str] = []
+            dataset_info: Dict[str, Any] = {}
 
             for result in results:
                 if isinstance(result, Exception):
+                    # Add exceptions as errors
                     all_errors.append(str(result))
                 elif isinstance(result, ValidationResult):
+                    # Merge errors and warnings from task result
                     if not result.is_valid:
                         all_errors.extend(result.errors)
                     all_warnings.extend(result.warnings)
+                    # Merge dataset metadata
                     if result.dataset_info:
                         dataset_info.update(result.dataset_info)
 
+            # Determine overall validation status
             is_valid = len(all_errors) == 0
-
+            status_message = "Dataset validation completed successfully" if is_valid else "Dataset validation failed"
+            
             return ValidationResult(
                 is_valid=is_valid,
-                message="Dataset validation completed",
+                message=status_message,
                 errors=all_errors,
                 warnings=all_warnings,
                 dataset_info=dataset_info
             )
 
         except Exception as e:
-            logger.error(f"Dataset validation error: {e}", exc_info=True)
+            logger.error(f"Unexpected error during dataset validation: {e}", exc_info=True)
             raise YOLOValidationException(
-                f"Dataset validation failed: {str(e)}",
-                dataset_path=dataset_path
+                f"Dataset validation failed for {dataset_path}: {str(e)}",
+                dataset_path=str(dataset_path)
             )
 
     async def _validate_from_ultralytics_lib(self, dataset_path: Path, dataset_type: str) -> ValidationResult:
-        """使用ultralytics库验证数据集"""
+        """
+        Validate dataset using Ultralytics Hub's built-in dataset checker.
+        
+        Args:
+            dataset_path: Path to dataset root
+            dataset_type: Type of dataset to validate
+            
+        Returns:
+            ValidationResult with outcome from Ultralytics checker
+        """
+        # Lazy import to avoid dependency if not using this validation method
         from ultralytics.hub import check_dataset
             
-        result = check_dataset(dataset_path, dataset_type)
-        if isinstance(result, str) and "error" in result.lower():
-            logger.error(f"Dataset validation failed: {result}")
+        # Run Ultralytics dataset check
+        check_result = check_dataset(str(dataset_path), dataset_type)
+
+        # Process check result (Ultralytics returns error string or True for success)
+        if isinstance(check_result, str) and "error" in check_result.lower():
+            logger.error(f"Ultralytics dataset validation failed: {check_result}")
             return ValidationResult(
                 is_valid=False,
-                message=result,
-                errors=[result],
+                message="Ultralytics dataset validation failed",
+                errors=[check_result],
                 warnings=[],
                 dataset_info={}
             )
 
-        logger.info(f"Dataset validation successful for: {dataset_path}")
+        logger.info(f"Ultralytics dataset validation passed for: {dataset_path}")
 
-        dataset_root = resolve_target_directory(dataset_path)
-
-        logger.info(f"Dataset root: {dataset_root}")
+        # Resolve dataset root directory and parse YAML for class information
+        dataset_root = resolve_target_directory(str(dataset_path))
+        logger.info(f"Resolved dataset root directory: {dataset_root}")
         
-        dataset_yaml_path = yolo_validator.find_dataset_yaml(str(dataset_root))
-
-        yaml_data = yolo_validator.parse_dataset_yaml(str(dataset_yaml_path))
+        # Find and parse dataset YAML file
+        dataset_yaml_path = self.find_dataset_yaml(str(dataset_root))
+        yaml_data = self.parse_dataset_yaml(str(dataset_yaml_path))
+        
+        # Extract sorted class names from YAML
         class_names = [yaml_data['names'][i] for i in sorted(yaml_data['names'].keys())]
 
+        # Collect dataset metadata
         dataset_info = {
             "dataset_type": dataset_type,
             "class_names": class_names,
-            "dataset_root": dataset_root
+            "dataset_root": str(dataset_root),
+            "yaml_path": str(dataset_yaml_path),
+            "num_classes": len(class_names)
         }
 
         return ValidationResult(
             is_valid=True,
-            message="Dataset validation successful",
+            message="Ultralytics dataset validation successful",
             errors=[],
             warnings=[],
             dataset_info=dataset_info
         )
 
     async def _validate_directory_structure(self, dataset_path: Path, dataset_type: str) -> ValidationResult:
-        """验证目录结构"""
-        errors = []
-        warnings = []
-        dataset_info = {}
+        """
+        Validate dataset directory structure matches YOLO specifications.
+        
+        Args:
+            dataset_path: Path to dataset root
+            dataset_type: Type of dataset (affects required directories)
+            
+        Returns:
+            ValidationResult with structure validation outcome
+        """
+        errors: List[str] = []
+        warnings: List[str] = []
+        dataset_info: Dict[str, Any] = {}
 
-        # 检查必要的目录
-        required_dirs = ["train", "val", "test"] if dataset_type != DatasetType.CLASSIFY.value else ["train"]
+        # Define required/optional directories based on dataset type
+        if dataset_type == DatasetType.CLASSIFY.value:
+            required_dirs = ["train"]  # Classification only requires train directory
+        else:
+            required_dirs = ["train", "val", "test"]  # Detection/segment/pose require train/val/test
 
+        # Check each required directory
         for dir_name in required_dirs:
             dir_path = dataset_path / dir_name
             if not dir_path.exists():
-                warnings.append(f"Optional directory missing: {dir_name}")
+                warnings.append(f"Optional directory missing: {dir_name} (recommended for complete dataset)")
             elif not dir_path.is_dir():
-                errors.append(f"{dir_name} exists but is not a directory")
+                errors.append(f"Invalid directory: {dir_name} exists but is not a directory")
 
-        # 检查数据集类型特定的目录结构
+        # Type-specific structure checks
         if dataset_type == DatasetType.SEGMENT.value:
+            # Check for segmentation-specific directories
             seg_dirs = ["segments", "masks"]
             for seg_dir in seg_dirs:
                 if (dataset_path / "train" / seg_dir).exists():
                     dataset_info[f"has_{seg_dir}"] = True
+                    logger.info(f"Found segmentation directory: {seg_dir}")
 
         return ValidationResult(
             is_valid=len(errors) == 0,
@@ -444,86 +515,148 @@ class YOLOValidator:
         )
 
     async def _validate_yaml_file(self, dataset_path: Path) -> ValidationResult:
-        """验证YAML配置文件"""
-        errors = []
-        warnings = []
+        """
+        Validate dataset YAML configuration file (required for YOLO datasets).
+        
+        Checks for mandatory fields and validates referenced paths.
+        
+        Args:
+            dataset_path: Path to dataset root
+            
+        Returns:
+            ValidationResult with YAML validation outcome
+        """
+        errors: List[str] = []
+        warnings: List[str] = []
+        dataset_info: Dict[str, Any] = {}
 
+        # Find all YAML files in dataset root
         yaml_files = list(dataset_path.glob("*.yaml")) + list(dataset_path.glob("*.yml"))
 
         if not yaml_files:
-            errors.append("No dataset YAML file found")
-            return ValidationResult(False, "YAML validation failed", errors, warnings)
+            errors.append("No dataset YAML file found (required for YOLO format)")
+            return ValidationResult(
+                is_valid=False,
+                message="YAML validation failed - no YAML file found",
+                errors=errors,
+                warnings=warnings
+            )
 
+        # Use the first found YAML file (standard for YOLO datasets)
         yaml_file = yaml_files[0]
+        logger.info(f"Validating dataset YAML file: {yaml_file}")
 
         try:
+            # Parse YAML file (use safe_load to prevent code execution)
             with open(yaml_file, 'r', encoding='utf-8') as f:
                 config = yaml.safe_load(f)
 
-            # 验证必需的字段
-            required_fields = ["train", "val", "nc", "names"]
-            for field in required_fields:
+            # Check for mandatory fields in YAML
+            mandatory_fields = ["train", "val", "nc", "names"]
+            for field in mandatory_fields:
                 if field not in config:
-                    errors.append(f"Missing required field in YAML: {field}")
+                    errors.append(f"Missing mandatory field in YAML: '{field}'")
 
-            # 验证路径格式
+            # Validate training/validation paths referenced in YAML
             if "train" in config:
                 train_path = dataset_path / config["train"]
                 if not train_path.exists():
-                    errors.append(f"Training data path does not exist: {config['train']}")
+                    errors.append(f"Training data path not found: {config['train']} (referenced in YAML)")
+            
+            if "val" in config:
+                val_path = dataset_path / config["val"]
+                if not val_path.exists():
+                    errors.append(f"Validation data path not found: {config['val']} (referenced in YAML)")
 
-            # 验证类别名称
-            if "names" in config and isinstance(config["names"], dict):
-                dataset_info = {"num_classes": len(config["names"])}
+            # Validate class names configuration
+            if "names" in config:
+                if isinstance(config["names"], dict):
+                    dataset_info["num_classes"] = len(config["names"])
+                    dataset_info["class_mapping"] = config["names"]
+                elif isinstance(config["names"], list):
+                    dataset_info["num_classes"] = len(config["names"])
+                    dataset_info["class_mapping"] = {i: name for i, name in enumerate(config["names"])}
+                else:
+                    warnings.append("Invalid 'names' format in YAML - expected dict or list")
             else:
-                warnings.append("Invalid or missing class names")
-                dataset_info = {}
+                warnings.append("No 'names' field found in YAML (class names will be unavailable)")
 
         except Exception as e:
-            errors.append(f"Error parsing YAML file: {e}")
-            dataset_info = {}
+            errors.append(f"Failed to parse YAML file {yaml_file}: {str(e)}")
 
         return ValidationResult(
             is_valid=len(errors) == 0,
-            message="YAML validation completed",
+            message="YAML configuration validation completed",
             errors=errors,
             warnings=warnings,
             dataset_info=dataset_info
         )
 
     async def _validate_annotations(self, dataset_path: Path, dataset_type: str) -> ValidationResult:
-        """验证标注文件"""
-        errors = []
-        warnings = []
-        dataset_info = {"annotation_stats": {}}
+        """
+        Validate annotation files (format, structure, and basic integrity).
+        
+        Args:
+            dataset_path: Path to dataset root
+            dataset_type: Type of dataset (affects annotation format checks)
+            
+        Returns:
+            ValidationResult with annotation validation outcome
+        """
+        errors: List[str] = []
+        warnings: List[str] = []
+        dataset_info: Dict[str, Any] = {"annotation_stats": {}}
 
-        # 收集所有txt文件
-        txt_files = list(dataset_path.rglob("*.txt"))
+        # Find all annotation TXT files (recursive search)
+        annotation_files = list(dataset_path.rglob("*.txt"))
 
-        if not txt_files:
-            warnings.append("No annotation files found")
-            return ValidationResult(True, "Annotation validation completed", errors, warnings)
+        if not annotation_files:
+            warnings.append("No annotation files found in dataset (normal for classification if using folder structure)")
+            return ValidationResult(
+                is_valid=True,
+                message="Annotation validation completed (no files found)",
+                errors=errors,
+                warnings=warnings,
+                dataset_info=dataset_info
+            )
 
-        annotation_count = 0
+        # Basic annotation statistics
+        total_annotations = 0
+        invalid_annotations = 0
 
-        for txt_file in txt_files:
+        for ann_file in annotation_files:
             try:
-                with open(txt_file, 'r', encoding='utf-8') as f:
+                with open(ann_file, 'r', encoding='utf-8') as f:
                     lines = f.readlines()
 
                 for line in lines:
                     line = line.strip()
-                    if line:
-                        annotation_count += 1
-                        parts = line.split()
-                        if not parts or not parts[0].isdigit():
-                            warnings.append(f"Invalid annotation format in {txt_file}: {line}")
+                    if not line:
+                        continue  # Skip empty lines
+
+                    total_annotations += 1
+                    parts = line.split()
+
+                    # Basic format check: first part must be class_id (integer)
+                    if not parts or not parts[0].lstrip('-').isdigit():
+                        invalid_annotations += 1
+                        warnings.append(f"Invalid annotation format in {ann_file}: '{line}' (class_id must be integer)")
 
             except Exception as e:
-                errors.append(f"Error reading annotation file {txt_file}: {e}")
+                errors.append(f"Failed to read annotation file {ann_file}: {str(e)}")
 
-        dataset_info["annotation_stats"]["total_annotations"] = annotation_count
-        dataset_info["annotation_stats"]["total_files"] = len(txt_files)
+        # Update annotation statistics
+        dataset_info["annotation_stats"] = {
+            "total_files": len(annotation_files),
+            "total_annotations": total_annotations,
+            "invalid_annotations": invalid_annotations
+        }
+
+        # Log summary
+        logger.info(
+            f"Annotation validation summary: {len(annotation_files)} files, "
+            f"{total_annotations} annotations, {invalid_annotations} invalid entries"
+        )
 
         return ValidationResult(
             is_valid=len(errors) == 0,
@@ -534,36 +667,79 @@ class YOLOValidator:
         )
 
     async def _validate_images(self, dataset_path: Path, dataset_type: str) -> ValidationResult:
-        """验证图像文件"""
-        errors = []
-        warnings = []
-        dataset_info = {"image_stats": {}}
+        """
+        Validate image files (presence, format, and basic statistics).
+        
+        Args:
+            dataset_path: Path to dataset root
+            dataset_type: Type of dataset (not used for basic image checks)
+            
+        Returns:
+            ValidationResult with image validation outcome and statistics
+        """
+        errors: List[str] = []
+        warnings: List[str] = []
+        dataset_info: Dict[str, Any] = {"image_stats": {}}
 
-        # 收集所有图像文件
-        image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
-        image_files = [f for f in dataset_path.rglob("*")
-                      if f.is_file() and f.suffix.lower() in image_extensions]
+        # Supported image formats (YOLO-compatible)
+        supported_image_extensions = {".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"}
+
+        # Find all image files (recursive search)
+        image_files = [
+            f for f in dataset_path.rglob("*")
+            if f.is_file() and f.suffix.lower() in supported_image_extensions
+        ]
 
         if not image_files:
-            warnings.append("No image files found")
-            return ValidationResult(True, "Image validation completed", errors, warnings)
+            errors.append("No valid image files found in dataset")
+            return ValidationResult(
+                is_valid=False,
+                message="Image validation failed - no images found",
+                errors=errors,
+                warnings=warnings,
+                dataset_info=dataset_info
+            )
 
-        image_count = len(image_files)
-        total_size = sum(f.stat().st_size for f in image_files)
+        # Calculate image statistics
+        total_images = len(image_files)
+        total_size_bytes = sum(f.stat().st_size for f in image_files)
+        total_size_mb = round(total_size_bytes / 1024 / 1024, 2)
 
-        dataset_info["image_stats"]["total_images"] = image_count
-        dataset_info["image_stats"]["total_size_mb"] = round(total_size / 1024 / 1024, 2)
+        # Optional: Check for extremely small/large images (configurable thresholds)
+        small_image_threshold = 10 * 1024  # 10KB
+        large_image_threshold = 100 * 1024 * 1024  # 100MB
+        small_images = [f for f in image_files if f.stat().st_size < small_image_threshold]
+        large_images = [f for f in image_files if f.stat().st_size > large_image_threshold]
 
-        # 检查图像大小分布
-        small_images = 0
-        large_images = 0
+        if small_images:
+            warnings.append(f"Found {len(small_images)} unusually small images (size < {small_image_threshold/1024:.0f}KB)")
+        if large_images:
+            warnings.append(f"Found {len(large_images)} unusually large images (size > {large_image_threshold/1024/1024:.0f}MB)")
 
-        for image_file in image_files:
-            try:
-                # 这里可以添加图像格式验证逻辑
-                pass
-            except Exception as e:
-                warnings.append(f"Error processing image {image_file}: {e}")
+        # Update image statistics in dataset info
+        dataset_info["image_stats"] = {
+            "total_images": total_images,
+            "total_size_mb": total_size_mb,
+            "small_images_count": len(small_images),
+            "large_images_count": len(large_images),
+            "supported_formats": sorted(supported_image_extensions)
+        }
+
+        # Optional: Add image format validation (e.g., using PIL to check corrupt images)
+        # Uncomment below to enable (requires Pillow installation)
+        # try:
+        #     from PIL import Image
+        #     corrupt_images = []
+        #     for img_file in image_files[:100]:  # Sample first 100 images to avoid performance issues
+        #         try:
+        #             with Image.open(img_file) as img:
+        #                 img.verify()
+        #         except Exception:
+        #             corrupt_images.append(str(img_file))
+        #     if corrupt_images:
+        #         warnings.append(f"Found {len(corrupt_images)} corrupt image files: {', '.join(corrupt_images[:5])}...")
+        # except ImportError:
+        #     logger.warning("Pillow not installed - skipping image corruption check")
 
         return ValidationResult(
             is_valid=len(errors) == 0,
@@ -574,133 +750,243 @@ class YOLOValidator:
         )
 
     def find_dataset_yaml(self, directory: str) -> Path:
-        """查找数据集YAML文件"""
-        directory = Path(directory)
+        """
+        Locate the dataset YAML configuration file in a directory.
+        
+        Args:
+            directory: Path to directory to search for YAML file
+            
+        Returns:
+            Path to the first found YAML file
+            
+        Raises:
+            FileNotFoundException: If directory does not exist
+            YOLOValidationException: If no YAML file is found
+        """
+        dir_path = Path(directory)
 
-        if not directory.exists():
-            raise FileNotFoundException(f"Directory does not exist: {directory}")
+        if not dir_path.exists():
+            raise FileNotFoundException(f"Directory not found: {dir_path}")
 
-        yaml_files = list(directory.glob("*.yaml")) + list(directory.glob("*.yml"))
+        # Search for .yaml and .yml files in the directory
+        yaml_files = list(dir_path.glob("*.yaml")) + list(dir_path.glob("*.yml"))
 
         if not yaml_files:
-            raise YOLOValidationException(f"No dataset YAML found in: {directory}")
+            raise YOLOValidationException(
+                f"No dataset YAML file found in directory: {dir_path}. "
+                "Expected a .yaml or .yml file with dataset configuration."
+            )
 
-        # 返回第一个找到的YAML文件
+        # Return the first found YAML file (YOLO datasets typically have one)
         return yaml_files[0]
 
     def parse_dataset_yaml(self, yaml_path: str) -> Dict[str, Any]:
-        """解析数据集YAML文件"""
-        logger.info(f"Parsing dataset YAML: {yaml_path}")
-
+        """
+        Parse dataset YAML configuration file into a dictionary.
+        
+        Args:
+            yaml_path: Path to the dataset YAML file
+            
+        Returns:
+            Parsed YAML data as a dictionary
+            
+        Raises:
+            FileNotFoundException: If YAML file does not exist
+            YOLOValidationException: If parsing fails
+        """
         yaml_path = Path(yaml_path)
+        logger.info(f"Parsing dataset YAML file: {yaml_path}")
+
         if not yaml_path.exists():
-            raise FileNotFoundException(f"YAML file not found: {yaml_path}")
+            raise FileNotFoundException(f"Dataset YAML file not found: {yaml_path}")
 
         try:
             with open(yaml_path, 'r', encoding='utf-8') as f:
-                data = yaml.safe_load(f)
+                # Use safe_load to prevent execution of arbitrary code
+                parsed_data = yaml.safe_load(f)
 
-            logger.info(f"Successfully parsed YAML file: {yaml_path}")
-            return data or {}
+            logger.info(f"Successfully parsed dataset YAML: {yaml_path}")
+            return parsed_data or {}  # Return empty dict if YAML is empty
 
         except Exception as e:
-            logger.error(f"Failed to parse YAML {yaml_path}: {e}", exc_info=True)
-            raise YOLOValidationException(f"Failed to parse YAML: {str(e)}")
+            logger.error(f"Failed to parse YAML file {yaml_path}: {e}", exc_info=True)
+            raise YOLOValidationException(
+                f"Failed to parse dataset YAML: {str(e)}. Check YAML syntax and file permissions."
+            )
 
     def get_dataset_type(self, dataset_path: str) -> str:
-        """检测数据集类型"""
-        logger.info(f"Detecting dataset type for: {dataset_path}")
-
+        """
+        Detect dataset type automatically based on directory structure and content.
+        
+        Uses heuristic checks to identify:
+        - OBB: Presence of OBB-related directory/filename patterns
+        - Classify: Presence of classification-related patterns
+        - Segment: Presence of segmentation directories (segments/masks)
+        - Pose: Presence of pose-related patterns
+        - Detect: Default if no other type is detected
+        
+        Args:
+            dataset_path: Path to dataset root
+            
+        Returns:
+            Detected dataset type (one of supported_types)
+            
+        Raises:
+            FileNotFoundException: If dataset path does not exist
+        """
+        logger.info(f"Automatically detecting dataset type for: {dataset_path}")
         dataset_path = Path(dataset_path)
 
         if not dataset_path.exists():
             raise FileNotFoundException(f"Dataset path does not exist: {dataset_path}")
 
-        # 检查特定的文件模式
-        type_checks = [
-            (self._has_obb_annotations, 'obb'),
-            (self._has_classify_annotations, 'classify'),
-            (self._has_segmentation_annotations, 'segment'),
-            (self._has_pose_annotations, 'pose'),
+        # Heuristic checks (ordered by specificity to avoid false positives)
+        type_detection_checks = [
+            (self._has_obb_annotations, DatasetType.OBB.value),
+            (self._has_classify_annotations, DatasetType.CLASSIFY.value),
+            (self._has_segmentation_annotations, DatasetType.SEGMENT.value),
+            (self._has_pose_annotations, DatasetType.POSE.value),
         ]
 
-        for check_func, dataset_type in type_checks:
-            if check_func(str(dataset_path)):
-                logger.info(f"Detected {dataset_type} dataset type")
-                return dataset_type
+        # Run detection checks in order
+        for detection_func, detected_type in type_detection_checks:
+            if detection_func(str(dataset_path)):
+                logger.info(f"Detected dataset type: {detected_type}")
+                return detected_type
 
-        # 默认检测为检测数据集
-        logger.info("Detected detection dataset type (default)")
-        return 'detect'
+        # Default to detection if no other type is detected
+        default_type = DatasetType.DETECT.value
+        logger.info(f"No specific dataset type detected - defaulting to: {default_type}")
+        return default_type
 
     def _has_classify_annotations(self, dataset_path: str) -> bool:
-        """检查是否有分类标注"""
-        classify_patterns = ['classify', 'classification']
+        """
+        Heuristic check for classification dataset: presence of classification-related patterns.
+        
+        Args:
+            dataset_path: Path to dataset root
+            
+        Returns:
+            True if classification dataset is suspected, False otherwise
+        """
+        classify_patterns = ['classify', 'classification', 'cls', 'category']
+        dir_path = Path(dataset_path)
 
         try:
-            for item in os.listdir(dataset_path):
-                if any(pattern in item.lower() for pattern in classify_patterns):
+            # Check directory names for classification patterns
+            for item in dir_path.iterdir():
+                if item.is_dir() and any(pattern in item.name.lower() for pattern in classify_patterns):
                     return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Error checking classification patterns: {e}")
 
         return False
 
     def _has_obb_annotations(self, dataset_path: str) -> bool:
-        """检查是否有OBB标注"""
-        obb_patterns = ['obb', 'rotated', 'rbox']
+        """
+        Heuristic check for OBB dataset: presence of OBB-related patterns.
+        
+        Args:
+            dataset_path: Path to dataset root
+            
+        Returns:
+            True if OBB dataset is suspected, False otherwise
+        """
+        obb_patterns = ['obb', 'rotated', 'rbox', 'oriented']
+        dir_path = Path(dataset_path)
 
         try:
-            for item in os.listdir(dataset_path):
-                if any(pattern in item.lower() for pattern in obb_patterns):
+            # Check directory/filename patterns for OBB indicators
+            for item in dir_path.rglob("*"):
+                if any(pattern in item.name.lower() for pattern in obb_patterns):
                     return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Error checking OBB patterns: {e}")
 
         return False
 
     def _has_segmentation_annotations(self, dataset_path: str) -> bool:
-        """检查是否有分割标注"""
-        seg_dirs = ['segments', 'masks', 'polygons']
+        """
+        Heuristic check for segmentation dataset: presence of segmentation directories.
+        
+        Args:
+            dataset_path: Path to dataset root
+            
+        Returns:
+            True if segmentation dataset is suspected, False otherwise
+        """
+        seg_dir_patterns = ['segments', 'masks', 'polygons', 'segmentation']
+        dir_path = Path(dataset_path)
 
         try:
-            for seg_dir in seg_dirs:
-                if (Path(dataset_path) / seg_dir).exists():
+            # Check for segmentation-specific directories
+            for seg_pattern in seg_dir_patterns:
+                if any(dir_path.rglob(seg_pattern)):
                     return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Error checking segmentation patterns: {e}")
 
         return False
 
     def _has_pose_annotations(self, dataset_path: str) -> bool:
-        """检查是否有姿态估计标注"""
-        pose_patterns = ['keypoints', 'pose', 'skeleton']
+        """
+        Heuristic check for pose dataset: presence of pose-related patterns.
+        
+        Args:
+            dataset_path: Path to dataset root
+            
+        Returns:
+            True if pose dataset is suspected, False otherwise
+        """
+        pose_patterns = ['keypoints', 'pose', 'skeleton', 'kps']
+        dir_path = Path(dataset_path)
 
         try:
-            for item in os.listdir(dataset_path):
-                if any(pattern in item.lower() for pattern in pose_patterns):
+            # Check directory/filename patterns for pose indicators
+            for item in dir_path.iterdir():
+                if item.is_dir() and any(pattern in item.name.lower() for pattern in pose_patterns):
                     return True
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Error checking pose patterns: {e}")
 
         return False
 
     async def parse_annotations(self, annotation_path: str, dataset_type: str,
                               class_names: List[str]) -> List[AnnotationInfo]:
-        """解析标注文件"""
-
+        """
+        Parse annotation file using the appropriate dataset-specific parser.
+        
+        Args:
+            annotation_path: Path to annotation TXT file
+            dataset_type: Type of dataset (determines parser to use)
+            class_names: List of class names from dataset YAML
+            
+        Returns:
+            List of structured AnnotationInfo objects
+            
+        Raises:
+            YOLODatasetTypeException: If dataset_type is unsupported
+            Exception: If parsing fails
+        """
+        # Validate dataset type is supported
         if dataset_type not in self._parsers:
-            raise YOLODatasetTypeException(f"Unsupported dataset type: {dataset_type}")
+            raise YOLODatasetTypeException(
+                f"Unsupported dataset type for parsing: {dataset_type}. "
+                f"Supported types: {', '.join(self._parsers.keys())}"
+            )
 
+        # Get the appropriate parser for the dataset type
         parser = self._parsers[dataset_type]
 
         try:
+            logger.debug(f"Parsing annotations with {parser.__class__.__name__}: {annotation_path}")
             annotations = await parser.parse(annotation_path, class_names)
+            logger.debug(f"Successfully parsed {len(annotations)} annotations from: {annotation_path}")
             return annotations
         except Exception as e:
-            logger.error(f"Error parsing annotations {annotation_path}: {str(e)}", exc_info=True)
+            logger.error(f"Failed to parse annotations from {annotation_path}: {str(e)}", exc_info=True)
             raise
 
 
-# 全局YOLO验证器实例
+# Global YOLO validator instance (for convenient access across the application)
 yolo_validator = YOLOValidator()

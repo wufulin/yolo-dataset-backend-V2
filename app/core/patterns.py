@@ -1,4 +1,4 @@
-"""设计模式实现 - 工厂模式、策略模式、观察者模式等"""
+"""Design-pattern utilities: factories, strategies, observers, and helpers."""
 import asyncio
 import logging
 import time
@@ -23,21 +23,21 @@ from app.utils.logger import get_logger
 
 logger: logging.Logger = get_logger(__name__)
 
-# 类型变量
+# Type variables for generics
 T = TypeVar('T')
 ServiceType = TypeVar('ServiceType')
 
 
 @runtime_checkable
 class ServiceFactory(Protocol):
-    """服务工厂协议"""
+    """Protocol for service factories."""
     def create_service(self, service_type: str, **kwargs) -> Any:
-        """创建服务实例"""
+        """Create a service instance."""
         ...
 
 
 class DatasetType(Enum):
-    """YOLO数据集类型"""
+    """YOLO dataset type enumeration."""
     DETECT = "detect"
     SEGMENT = "segment"
     POSE = "pose"
@@ -46,20 +46,20 @@ class DatasetType(Enum):
 
 
 class ServiceFactoryBase(ABC):
-    """服务工厂基类"""
+    """Abstract base class for service factories."""
 
     @abstractmethod
     def create_service(self, service_type: str, **kwargs) -> Any:
-        """创建服务实例"""
+        """Create a concrete service instance."""
         pass
 
     def get_available_types(self) -> List[str]:
-        """获取可用的服务类型"""
+        """Return registered service type names."""
         return []
 
 
 class DatasetServiceFactory(ServiceFactoryBase):
-    """数据集服务工厂"""
+    """Factory responsible for dataset-related services."""
 
     def __init__(self):
         self._services: Dict[str, Type] = {}
@@ -67,8 +67,7 @@ class DatasetServiceFactory(ServiceFactoryBase):
         self._register_default_services()
 
     def _register_default_services(self):
-        """注册默认服务类型"""
-        # 这里导入具体的服务类，避免循环导入
+        """Register built-in services while avoiding circular imports."""
         try:
             from app.services.dataset_service import DatasetService
             from app.services.image_service import ImageService
@@ -78,31 +77,31 @@ class DatasetServiceFactory(ServiceFactoryBase):
                 "dataset": DatasetService,
                 "image": ImageService,
                 "minio": MinioService,
-                "db": lambda: None,  # 数据库服务是单例，不需要工厂创建
+                "db": lambda: None,  # Database service is a singleton elsewhere
             }
         except ImportError as e:
             logger.warning(f"Could not import services for factory registration: {e}")
 
     def create_service(self, service_type: str, **kwargs) -> Any:
-        """创建服务实例"""
+        """Instantiate or retrieve a service by type."""
         if service_type not in self._services:
             raise BusinessLogicException(f"Unknown service type: {service_type}")
 
-        # 数据库服务特殊处理（单例模式）
+        # Shortcut for singleton DB service
         if service_type == "db":
             from app.services.db_service import db_service
             return db_service
 
-        # 检查是否已经有缓存的实例（如果支持单例）
+        # Return cached singleton when available
         if service_type in self._instances:
             return self._instances[service_type]
 
-        # 创建新实例
+        # Create fresh instance
         service_class = self._services[service_type]
         try:
             instance = service_class(**kwargs)
 
-            # 缓存某些服务类型的实例
+            # Cache specific service types for reuse
             if service_type in ["minio"]:
                 self._instances[service_type] = instance
 
@@ -112,34 +111,34 @@ class DatasetServiceFactory(ServiceFactoryBase):
             raise BusinessLogicException(f"Failed to create service {service_type}: {str(e)}")
 
     def get_available_types(self) -> List[str]:
-        """获取可用的服务类型"""
+        """Return list of supported service types."""
         return list(self._services.keys())
 
     def register_service(self, service_type: str, service_class: Type):
-        """注册新的服务类型"""
+        """Register additional service types at runtime."""
         self._services[service_type] = service_class
         logger.info(f"Registered service type: {service_type}")
 
 
 class DatasetValidationStrategy(ABC, Generic[T]):
-    """数据集验证策略基类"""
+    """Base class for dataset validation strategies."""
 
     @abstractmethod
     async def validate(self, dataset_path: str, **kwargs) -> T:
-        """验证数据集"""
+        """Validate a dataset located at dataset_path."""
         pass
 
     @abstractmethod
     def get_supported_types(self) -> List[str]:
-        """获取支持的数据集类型"""
+        """Return the dataset types supported by this strategy."""
         pass
 
 
 class DetectDatasetValidator(DatasetValidationStrategy[bool]):
-    """检测数据集验证策略"""
+    """Validation strategy for detection datasets."""
 
     async def validate(self, dataset_path: str, **kwargs) -> bool:
-        """验证检测数据集"""
+        """Validate detection dataset structure."""
         try:
             from app.utils.yolo_validator import yolo_validator
             return yolo_validator.validate_dataset(dataset_path, "detect")[0]
@@ -152,10 +151,10 @@ class DetectDatasetValidator(DatasetValidationStrategy[bool]):
 
 
 class SegmentDatasetValidator(DatasetValidationStrategy[bool]):
-    """分割数据集验证策略"""
+    """Validation strategy for segmentation datasets."""
 
     async def validate(self, dataset_path: str, **kwargs) -> bool:
-        """验证分割数据集"""
+        """Validate segmentation dataset structure."""
         try:
             from app.utils.yolo_validator import yolo_validator
             return yolo_validator.validate_dataset(dataset_path, "segment")[0]
@@ -168,10 +167,10 @@ class SegmentDatasetValidator(DatasetValidationStrategy[bool]):
 
 
 class PoseDatasetValidator(DatasetValidationStrategy[bool]):
-    """姿态估计数据集验证策略"""
+    """Validation strategy for pose datasets."""
 
     async def validate(self, dataset_path: str, **kwargs) -> bool:
-        """验证姿态估计数据集"""
+        """Validate pose dataset structure."""
         try:
             from app.utils.yolo_validator import yolo_validator
             return yolo_validator.validate_dataset(dataset_path, "pose")[0]
@@ -184,10 +183,10 @@ class PoseDatasetValidator(DatasetValidationStrategy[bool]):
 
 
 class OBBDatasetValidator(DatasetValidationStrategy[bool]):
-    """定向边界框数据集验证策略"""
+    """Validation strategy for oriented bounding box datasets."""
 
     async def validate(self, dataset_path: str, **kwargs) -> bool:
-        """验证定向边界框数据集"""
+        """Validate oriented bounding box dataset structure."""
         try:
             from app.utils.yolo_validator import yolo_validator
             return yolo_validator.validate_dataset(dataset_path, "obb")[0]
@@ -200,10 +199,10 @@ class OBBDatasetValidator(DatasetValidationStrategy[bool]):
 
 
 class ClassifyDatasetValidator(DatasetValidationStrategy[bool]):
-    """分类数据集验证策略"""
+    """Validation strategy for classification datasets."""
 
     async def validate(self, dataset_path: str, **kwargs) -> bool:
-        """验证分类数据集"""
+        """Validate classification dataset structure."""
         try:
             from app.utils.yolo_validator import yolo_validator
             return yolo_validator.validate_dataset(dataset_path, "classify")[0]
@@ -216,14 +215,14 @@ class ClassifyDatasetValidator(DatasetValidationStrategy[bool]):
 
 
 class DatasetValidatorContext:
-    """数据集验证上下文 - 策略模式的上下文类"""
+    """Strategy context responsible for dataset validation orchestration."""
 
     def __init__(self):
         self._strategies: Dict[str, DatasetValidationStrategy] = {}
         self._register_default_strategies()
 
     def _register_default_strategies(self):
-        """注册默认验证策略"""
+        """Register default strategies."""
         self._strategies = {
             DatasetType.DETECT.value: DetectDatasetValidator(),
             DatasetType.SEGMENT.value: SegmentDatasetValidator(),
@@ -233,14 +232,14 @@ class DatasetValidatorContext:
         }
 
     def validate_dataset(self, dataset_path: str, dataset_type: str) -> bool:
-        """验证数据集"""
+        """Validate dataset using the registered strategy."""
         if dataset_type not in self._strategies:
             logger.error(f"No validator found for dataset type: {dataset_type}")
             return False
 
         try:
             strategy = self._strategies[dataset_type]
-            # 同步调用async方法
+            # Execute async validation in a temporary loop
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
@@ -253,39 +252,39 @@ class DatasetValidatorContext:
             return False
 
     def register_strategy(self, dataset_type: str, strategy: DatasetValidationStrategy):
-        """注册新的验证策略"""
+        """Register a new dataset validation strategy."""
         self._strategies[dataset_type] = strategy
         logger.info(f"Registered validation strategy for type: {dataset_type}")
 
     def get_available_types(self) -> List[str]:
-        """获取支持的验证类型"""
+        """Return supported dataset type keys."""
         return list(self._strategies.keys())
 
 
 class Observer(ABC):
-    """观察者基类"""
+    """Base class for observers."""
 
     @abstractmethod
     async def update(self, event_type: str, data: Dict[str, Any]):
-        """更新方法"""
+        """Consume events emitted by Observable."""
         pass
 
 
 class Observable:
-    """可观察对象"""
+    """Subject implementation that manages observer lifecycles."""
 
     def __init__(self):
         self._observers: Dict[str, List[Observer]] = {}
 
     def attach(self, event_type: str, observer: Observer):
-        """附加观察者"""
+        """Subscribe an observer to a given event type."""
         if event_type not in self._observers:
             self._observers[event_type] = []
         self._observers[event_type].append(observer)
         logger.debug(f"Attached observer for event: {event_type}")
 
     def detach(self, event_type: str, observer: Observer):
-        """分离观察者"""
+        """Unsubscribe an observer from a given event type."""
         if event_type in self._observers:
             try:
                 self._observers[event_type].remove(observer)
@@ -294,7 +293,7 @@ class Observable:
                 logger.warning(f"Observer not found for event: {event_type}")
 
     async def notify(self, event_type: str, data: Dict[str, Any]):
-        """通知观察者"""
+        """Notify observers asynchronously."""
         if event_type in self._observers:
             tasks = []
             for observer in self._observers[event_type]:
@@ -311,7 +310,7 @@ class Observable:
                 await asyncio.gather(*tasks, return_exceptions=True)
 
     def _sync_to_async(self, func, *args):
-        """同步函数转异步"""
+        """Helper to run sync callbacks in the background."""
         def wrapper():
             return func(*args)
 
@@ -324,13 +323,13 @@ class Observable:
 
 
 class UploadProgressObserver(Observer):
-    """上传进度观察者"""
+    """Observer that logs upload progress updates."""
 
     def __init__(self, session_id: str):
         self.session_id = session_id
 
     async def update(self, event_type: str, data: Dict[str, Any]):
-        """更新上传进度"""
+        """Handle upload progress events."""
         if event_type == "upload_progress":
             progress = data.get("progress", 0)
             filename = data.get("filename", "unknown")
@@ -341,15 +340,15 @@ class UploadProgressObserver(Observer):
                 f"{progress:.1f}% ({speed:.2f} MB/s)"
             )
 
-            # 这里可以更新数据库或Redis中的进度信息
+            # Hook for persisting progress to Redis or database if desired
             # await self._update_progress_in_db(progress, speed)
 
 
 class FileValidationObserver(Observer):
-    """文件验证观察者"""
+    """Observer that tracks file validation events."""
 
     async def update(self, event_type: str, data: Dict[str, Any]):
-        """更新文件验证状态"""
+        """Handle file validation events."""
         if event_type == "file_validation":
             filename = data.get("filename", "unknown")
             is_valid = data.get("is_valid", False)
@@ -362,10 +361,10 @@ class FileValidationObserver(Observer):
 
 
 class DatasetCreationObserver(Observer):
-    """数据集创建观察者"""
+    """Observer for dataset creation lifecycle."""
 
     async def update(self, event_type: str, data: Dict[str, Any]):
-        """更新数据集创建状态"""
+        """Handle dataset creation events."""
         if event_type == "dataset_creation":
             dataset_name = data.get("dataset_name", "unknown")
             status = data.get("status", "unknown")
@@ -375,7 +374,7 @@ class DatasetCreationObserver(Observer):
 
 @dataclass
 class UploadEvent:
-    """上传事件数据类"""
+    """Upload event payload definition."""
     session_id: str
     filename: str
     file_size: int
@@ -386,14 +385,14 @@ class UploadEvent:
 
 
 class UploadProgressTracker(Observable):
-    """上传进度追踪器"""
+    """Observable specialized for upload progress reporting."""
 
     def __init__(self):
         super().__init__()
         self._active_uploads: Dict[str, UploadEvent] = {}
 
     async def start_upload(self, session_id: str, filename: str, file_size: int):
-        """开始上传追踪"""
+        """Start tracking an upload session."""
         upload_event = UploadEvent(
             session_id=session_id,
             filename=filename,
@@ -413,7 +412,7 @@ class UploadProgressTracker(Observable):
         })
 
     async def update_progress(self, session_id: str, uploaded_bytes: int, speed_mbps: float):
-        """更新上传进度"""
+        """Record upload progress and notify observers."""
         if session_id not in self._active_uploads:
             logger.warning(f"Unknown upload session: {session_id}")
             return
@@ -424,7 +423,7 @@ class UploadProgressTracker(Observable):
         event.speed_mbps = speed_mbps
         event.timestamp = time.time()
 
-        # 通知观察者
+        # Notify observers with updated metrics
         await self.notify("upload_progress", {
             "session_id": session_id,
             "filename": event.filename,
@@ -435,7 +434,7 @@ class UploadProgressTracker(Observable):
         })
 
     async def complete_upload(self, session_id: str):
-        """完成上传"""
+        """Finish tracking an upload session."""
         if session_id not in self._active_uploads:
             return
 
@@ -450,6 +449,6 @@ class UploadProgressTracker(Observable):
         del self._active_uploads[session_id]
 
     def get_active_uploads(self) -> List[UploadEvent]:
-        """获取活跃的上传任务"""
+        """Return active uploads as a list of events."""
         return list(self._active_uploads.values())
 

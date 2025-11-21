@@ -1,4 +1,4 @@
-"""Service for handling dataset operations - 改进版本，使用设计模式和异常处理."""
+"""Service layer for handling dataset operations with structured patterns and error handling."""
 import asyncio
 from datetime import datetime
 from enum import Enum
@@ -36,7 +36,7 @@ logger: logging.Logger = get_logger(__name__)
 
 
 class DatasetStatus(Enum):
-    """数据集状态枚举"""
+    """Enumeration of dataset lifecycle states."""
     ACTIVE = "active"
     PROCESSING = "processing"
     VALIDATING = "validating"
@@ -45,7 +45,7 @@ class DatasetStatus(Enum):
 
 
 class DatasetFilter(BaseModel):
-    """数据集过滤参数"""
+    """Filter parameters accepted by dataset listing endpoints."""
     status: Optional[DatasetStatus] = None
     dataset_type: Optional[str] = None
     created_by: Optional[str] = None
@@ -55,7 +55,7 @@ class DatasetFilter(BaseModel):
 
 
 class DatasetRepository(Protocol):
-    """数据集仓储协议"""
+    """Protocol describing the repository contract for datasets."""
 
     async def create(self, dataset: Dataset) -> str: ...
     async def get_by_id(self, dataset_id: str) -> Optional[Dataset]: ...
@@ -66,7 +66,7 @@ class DatasetRepository(Protocol):
 
 
 class MongoDatasetRepository:
-    """MongoDB数据集仓储实现"""
+    """MongoDB-backed DatasetRepository implementation."""
 
     def __init__(self):
         self.db = db_service
@@ -76,7 +76,7 @@ class MongoDatasetRepository:
     @async_exception_handler(DatabaseException)
     @async_performance_monitor("dataset_create")
     async def create(self, dataset: Dataset) -> str:
-        """创建数据集"""
+        """Create a dataset document."""
         try:
             dataset_dict = dataset.to_mongo_dict()
             result = self.collection.insert_one(dataset_dict)
@@ -97,7 +97,7 @@ class MongoDatasetRepository:
     @async_exception_handler(DatabaseException)
     @async_performance_monitor("dataset_get_by_id")
     async def get_by_id(self, dataset_id: str) -> Optional[Dataset]:
-        """根据ID获取数据集"""
+        """Return a dataset by its identifier."""
         try:
             if not ObjectId.is_valid(dataset_id):
                 raise ValidationException(f"Invalid ObjectId format: {dataset_id}")
@@ -115,7 +115,7 @@ class MongoDatasetRepository:
     @async_exception_handler(DatabaseException)
     @async_performance_monitor("dataset_list")
     async def list(self, filters: DatasetFilter, skip: int, limit: int) -> List[Dataset]:
-        """列出数据集"""
+        """List datasets that match the provided filters."""
         try:
             query = self._build_query(filters)
             cursor = self.collection.find(query).skip(skip).limit(limit).sort("created_at", -1)
@@ -131,7 +131,7 @@ class MongoDatasetRepository:
             raise DatabaseException(f"Failed to list datasets: {e}")
 
     def _build_query(self, filters: DatasetFilter) -> Dict[str, Any]:
-        """构建查询条件"""
+        """Convert incoming filters into a MongoDB query."""
         query = {}
 
         if filters.status:
@@ -162,7 +162,7 @@ class MongoDatasetRepository:
     @async_exception_handler(DatabaseException)
     @async_performance_monitor("dataset_update")
     async def update(self, dataset_id: str, updates: Dict[str, Any]) -> bool:
-        """更新数据集"""
+        """Update a dataset document."""
         try:
             if not ObjectId.is_valid(dataset_id):
                 raise ValidationException(f"Invalid ObjectId format: {dataset_id}")
@@ -188,7 +188,7 @@ class MongoDatasetRepository:
     @async_exception_handler(DatabaseException)
     @async_performance_monitor("dataset_delete")
     async def delete(self, dataset_id: str) -> bool:
-        """删除数据集（软删除）"""
+        """Soft-delete a dataset by marking its status as deleted."""
         try:
             if not ObjectId.is_valid(dataset_id):
                 raise ValidationException(f"Invalid ObjectId format: {dataset_id}")
@@ -211,7 +211,7 @@ class MongoDatasetRepository:
 
     @async_exception_handler(DatabaseException)
     async def count(self, filters: DatasetFilter) -> int:
-        """计算数据集数量"""
+        """Return total dataset count for the given filters."""
         try:
             query = self._build_query(filters)
             return self.collection.count_documents(query)
@@ -220,46 +220,46 @@ class MongoDatasetRepository:
 
 
 class DatasetService:
-    """数据集服务类 - 使用仓储模式和业务逻辑"""
+    """High-level dataset service that coordinates repository and validation logic."""
 
     def __init__(self, repository: Optional[DatasetRepository] = None):
-        """初始化数据集服务"""
+        """Initialize the service with a repository implementation."""
         self.repository = repository or MongoDatasetRepository()
         self.validator_context = DatasetValidatorContext()
 
     @async_exception_handler
     @async_performance_monitor("create_dataset")
     async def create_dataset(self, dataset: Dataset) -> str:
-        """创建数据集"""
-        # 验证数据集类型
+        """Create a dataset and schedule async validation."""
+        # Ensure dataset type is supported
         if dataset.dataset_type not in self.validator_context.get_available_types():
             raise ValidationException(f"Unsupported dataset type: {dataset.dataset_type}")
 
-        # 验证数据集名称唯一性
+        # Ensure name uniqueness across datasets
         await self._validate_dataset_name_unique(dataset.name)
 
-        # 创建数据集
+        # Persist dataset metadata
         dataset_id = await self.repository.create(dataset)
 
-        # 异步验证数据集
+        # Trigger asynchronous validation
         asyncio.create_task(self._validate_dataset_async(dataset_id, dataset))
 
         return dataset_id
 
     async def _validate_dataset_name_unique(self, name: str) -> None:
-        """验证数据集名称唯一性"""
+        """Ensure that no other dataset uses the same name."""
         filters = DatasetFilter(search_text=name)
         existing_count = await self.repository.count(filters)
         if existing_count > 0:
             raise DatasetAlreadyExistsException(name)
 
     async def _validate_dataset_async(self, dataset_id: str, dataset: Dataset) -> None:
-        """异步验证数据集"""
+        """Validate dataset contents asynchronously."""
         try:
             await self.repository.update(dataset_id, {"status": DatasetStatus.VALIDATING.value})
 
-            # 这里应该根据实际的存储路径进行验证
-            # 由于这是演示，我们跳过实际的验证过程
+            # Placeholder for actual validation process. In production this should
+            # inspect storage_path + dataset type.
             is_valid = True  # await self.validator_context.validate_dataset(dataset.storage_path, dataset.dataset_type)
 
             if is_valid:
@@ -274,7 +274,7 @@ class DatasetService:
     @async_exception_handler
     @async_performance_monitor("get_dataset")
     async def get_dataset(self, dataset_id: str) -> Optional[Dataset]:
-        """获取数据集"""
+        """Fetch a dataset by id via repository."""
         return await self.repository.get_by_id(dataset_id)
 
     @async_exception_handler
@@ -285,7 +285,7 @@ class DatasetService:
         page: int = 1,
         page_size: int = 20
     ) -> Dict[str, Any]:
-        """列出数据集"""
+        """Return paginated datasets for UI consumption."""
         filters = filters or DatasetFilter()
 
         skip = (page - 1) * page_size
@@ -316,8 +316,8 @@ class DatasetService:
         test_annotations: int = 0,
         test_size: int = 0
     ) -> bool:
-        """更新数据集统计信息"""
-        # 验证参数
+        """Update aggregate dataset statistics."""
+        # Validate incoming counts before persisting
         if any(count < 0 for count in [train_images, val_images, test_images]):
             raise ValidationException("Image counts cannot be negative")
 
@@ -342,25 +342,25 @@ class DatasetService:
     @async_exception_handler
     @async_performance_monitor("delete_dataset")
     async def delete_dataset(self, dataset_id: str) -> bool:
-        """删除数据集"""
+        """Soft-delete dataset via repository."""
         return await self.repository.delete(dataset_id)
 
     @async_exception_handler
     @async_performance_monitor("validate_dataset")
     async def validate_dataset(self, dataset_id: str) -> Dict[str, Any]:
-        """验证数据集"""
+        """Run validation pipeline for a dataset."""
         dataset = await self.get_dataset(dataset_id)
         if not dataset:
             raise DatasetNotFoundException(dataset_id)
 
-        # 更新验证状态
+        # Mark dataset as being validated
         await self.repository.update(dataset_id, {"status": DatasetStatus.VALIDATING.value})
 
         try:
-            # 验证数据集格式
+            # Run validation procedure against dataset data
             is_valid = await self._perform_validation(dataset)
 
-            # 更新验证结果
+            # Store validation output on dataset document
             validation_result = {
                 "is_valid": is_valid,
                 "validated_at": datetime.utcnow(),
@@ -383,11 +383,10 @@ class DatasetService:
             raise BusinessLogicException(f"Dataset validation failed: {str(e)}")
 
     async def _perform_validation(self, dataset: Dataset) -> bool:
-        """执行数据集验证"""
-        # 这里实现具体的验证逻辑
-        # 由于这是演示，我们返回True
+        """Placeholder for actual dataset validation logic."""
+        # TODO: implement real validation. Demo returns True to unblock flow.
         return True
 
 
-# 全局数据集服务实例
+# Global dataset service instance
 dataset_service = DatasetService()

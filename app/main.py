@@ -4,7 +4,7 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import HTTPException, RequestValidationError
@@ -23,9 +23,7 @@ from app.core.exceptions import (
     DatabaseException,
     ErrorCategory,
     ErrorSeverity,
-)
-from app.core.exceptions import ValidationException as CustomValidationException
-from app.core.exceptions import (
+    ValidationException as CustomValidationException,
     YOLOException,
 )
 from app.services.redis_service import redis_session_manager
@@ -36,21 +34,28 @@ logger: logging.Logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> Any:
-    """应用生命周期管理"""
-    # 启动逻辑
+    """Application lifecycle management
+    
+    Handles startup and shutdown logic for the FastAPI application,
+    including external service connections (e.g., Redis).
+    """
+    # Startup logic
     logger.info("Starting YOLO Dataset API...")
 
     try:
-        # 初始化Redis连接
+        # Initialize Redis connection
         await redis_session_manager.connect()
         logger.info("Redis connection established successfully")
     except Exception as e:
         logger.error(f"Failed to connect to Redis: {e}")
-        logger.warning("Application will start without Redis - session management will use in-memory storage")
+        logger.warning(
+            "Application will start without Redis - "
+            "session management will use in-memory storage"
+        )
 
-    yield  # 应用运行期间
+    yield  # Application runtime
 
-    # 关闭逻辑
+    # Shutdown logic
     logger.info("Shutting down YOLO Dataset API...")
 
     try:
@@ -61,42 +66,49 @@ async def lifespan(app: FastAPI) -> Any:
 
 
 def create_application() -> FastAPI:
-    """创建和配置FastAPI应用"""
+    """Create and configure FastAPI application instance
+    
+    Configures CORS, exception handlers, routes, and other core settings.
+    Returns a fully initialized FastAPI app.
+    """
     application = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description="YOLO Dataset Management API v2.0.0 - 现代化、高性能的YOLO数据集管理系统",
+        description="YOLO Dataset Management API v2.0.0 - Modern, high-performance YOLO dataset management system",
         docs_url="/docs",
         redoc_url="/redoc",
         lifespan=lifespan
     )
 
-    # 添加CORS中间件
+    # Add CORS middleware (configure specific origins in production)
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # 生产环境需要配置具体域名
+        allow_origins=["*"],  # Replace with specific domains in production
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    # 注册全局异常处理器
+    # Register global exception handlers
     _register_exception_handlers(application)
 
-    # 注册路由
+    # Register API routes
     _register_routes(application)
 
-    logger.info(f"Application '{settings.app_name}' v{settings.app_version} created successfully")
+    logger.info(
+        f"Application '{settings.app_name}' v{settings.app_version} "
+        "created successfully"
+    )
 
     return application
 
 
-def _register_exception_handlers(app: FastAPI) -> Any:
-    """注册全局异常处理器"""
+def _register_exception_handlers(app: FastAPI) -> None:
+    """Register global exception handlers for consistent error responses"""
 
     @app.exception_handler(YOLOException)
-    async def yolo_exception_handler(request: Request, exc: YOLOException) -> Any:
-        """处理自定义YOLO异常"""
+    async def yolo_exception_handler(request: Request, exc: YOLOException) -> JSONResponse:
+        """Handle custom YOLO-specific exceptions"""
         logger.error(
             f"YOLO exception occurred: {exc.message}",
             extra={
@@ -127,8 +139,8 @@ def _register_exception_handlers(app: FastAPI) -> Any:
         )
 
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException) -> Any:
-        """处理HTTP异常"""
+    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        """Handle FastAPI HTTP exceptions"""
         logger.warning(f"HTTP exception: {exc.status_code} - {exc.detail}")
         return JSONResponse(
             status_code=exc.status_code,
@@ -143,8 +155,8 @@ def _register_exception_handlers(app: FastAPI) -> Any:
         )
 
     @app.exception_handler(ValidationError)
-    async def validation_exception_handler(request: Request, exc: ValidationError) -> Any:
-        """处理Pydantic验证异常"""
+    async def validation_exception_handler(request: Request, exc: ValidationError) -> JSONResponse:
+        """Handle Pydantic model validation exceptions"""
         logger.warning(f"Validation error: {exc}")
         return JSONResponse(
             status_code=422,
@@ -160,9 +172,9 @@ def _register_exception_handlers(app: FastAPI) -> Any:
         )
 
     @app.exception_handler(StarletteHTTPException)
-    async def starlette_exception_handler(request: Request, exc: StarletteHTTPException) -> Any:
-        """处理Starlette HTTP异常"""
-        logger.warning(f"Starlette HTTP exception: {exc.status_code}")
+    async def starlette_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        """Handle Starlette base HTTP exceptions"""
+        logger.warning(f"Starlette HTTP exception: {exc.status_code} - {exc.detail}")
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -177,11 +189,15 @@ def _register_exception_handlers(app: FastAPI) -> Any:
 
     @app.exception_handler(Exception)
     @performance_monitor("global_exception_handler")
-    async def global_exception_handler(request: Request, exc: Exception) -> Any:
-        """全局异常处理器"""
+    async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        """Global exception handler for uncaught exceptions
+        
+        Provides consistent error formatting and logs detailed exception info
+        for debugging purposes.
+        """
         logger.error(
             f"Unhandled exception: {type(exc).__name__}: {exc}",
-            exc_info=True,
+            exc_info=True,  # Include full traceback in logs
             extra={
                 "request_path": request.url.path,
                 "request_method": request.method,
@@ -189,7 +205,7 @@ def _register_exception_handlers(app: FastAPI) -> Any:
             }
         )
 
-        # 根据异常类型决定返回状态码
+        # Map exception type to appropriate status code and message
         if isinstance(exc, ConnectionError):
             status_code = 503
             message = "Service temporarily unavailable"
@@ -217,13 +233,15 @@ def _register_exception_handlers(app: FastAPI) -> Any:
         )
 
 
-def _register_routes(app: FastAPI) -> Any:
-    """注册路由"""
+def _register_routes(app: FastAPI) -> None:
+    """Register API routes with the FastAPI application"""
+    # Dataset management routes
     app.include_router(
         datasets.router,
         prefix="/api/v1",
         tags=["datasets"]
     )
+    # File upload routes
     app.include_router(
         upload.router,
         prefix="/api/v1",
@@ -232,181 +250,41 @@ def _register_routes(app: FastAPI) -> Any:
 
 
 def _map_error_category_to_status_code(category: ErrorCategory) -> int:
-    """将错误类别映射到HTTP状态码"""
-    mapping = {
-        ErrorCategory.AUTHENTICATION: 401,
-        ErrorCategory.AUTHORIZATION: 403,
-        ErrorCategory.VALIDATION: 422,
-        ErrorCategory.BUSINESS_LOGIC: 400,
-        ErrorCategory.DATABASE: 500,
-        ErrorCategory.STORAGE: 500,
-        ErrorCategory.NETWORK: 503,
-        ErrorCategory.FILE_SYSTEM: 500,
-        ErrorCategory.EXTERNAL_SERVICE: 502,
-        ErrorCategory.SYSTEM: 500
+    """Map custom error categories to standard HTTP status codes
+    
+    Args:
+        category: ErrorCategory enum value
+        
+    Returns:
+        Corresponding HTTP status code
+    """
+    status_code_mapping: Dict[ErrorCategory, int] = {
+        ErrorCategory.AUTHENTICATION: 401,    # Unauthorized
+        ErrorCategory.AUTHORIZATION: 403,     # Forbidden
+        ErrorCategory.VALIDATION: 422,        # Unprocessable Entity
+        ErrorCategory.BUSINESS_LOGIC: 400,    # Bad Request
+        ErrorCategory.DATABASE: 500,          # Internal Server Error
+        ErrorCategory.STORAGE: 500,           # Internal Server Error
+        ErrorCategory.NETWORK: 503,           # Service Unavailable
+        ErrorCategory.FILE_SYSTEM: 500,       # Internal Server Error
+        ErrorCategory.EXTERNAL_SERVICE: 502,  # Bad Gateway
+        ErrorCategory.SYSTEM: 500             # Internal Server Error
     }
-    return mapping.get(category, 500)
+    return status_code_mapping.get(category, 500)  # Default to 500
 
 
-# 创建应用实例
+# Create FastAPI application instance
 app: FastAPI = create_application()
 
-
-@app.get("/")
-@performance_monitor("root_endpoint")
-async def root() -> Any:
-    """根端点"""
-    logger.info("Root endpoint accessed")
-    return {
-        "message": f"Welcome to {settings.app_name}",
-        "version": settings.app_version,
-        "description": "Modern, high-performance YOLO dataset management system",
-        "documentation": "/docs",
-        "health_check": "/health"
-    }
-
-
-@app.get("/health")
-@performance_monitor("health_check")
-async def health_check() -> Any:
-    """健康检查端点"""
-    logger.debug("Health check endpoint accessed")
-
-    health_status = {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": settings.app_version,
-        "environment": settings.environment.value
-    }
-
-    # 检查Redis连接
-    try:
-        redis_manager = redis_session_manager
-        if redis_manager.redis:
-            await redis_manager.redis.ping()
-            health_status["redis"] = {
-                "status": "connected",
-                "type": "primary"
-            }
-        else:
-            health_status["redis"] = {
-                "status": "not_initialized",
-                "type": "memory_fallback"
-            }
-    except Exception as e:
-        health_status["redis"] = {
-            "status": "error",
-            "error": str(e)
-        }
-
-    # 检查数据库连接（如果可用）
-    try:
-        from app.services.db_service import db_service
-
-        # 这里可以添加数据库健康检查
-        health_status["database"] = {
-            "status": "connected",
-            "type": "mongodb"
-        }
-    except Exception as e:
-        health_status["database"] = {
-            "status": "error",
-            "error": str(e)
-        }
-
-    # 整体健康状态
-    critical_services = ["redis"]
-    service_statuses = [health_status.get(service, {}).get("status") for service in critical_services]
-
-    if all(status == "connected" for status in service_statuses):
-        overall_status = "healthy"
-    elif any(status == "error" for status in service_statuses):
-        overall_status = "unhealthy"
-    else:
-        overall_status = "degraded"
-
-    health_status["overall_status"] = overall_status
-
-    # 设置响应状态码
-    status_code = 200 if overall_status == "healthy" else (503 if overall_status == "unhealthy" else 200)
-
-    # 如果是不健康状态，记录日志
-    if overall_status != "healthy":
-        logger.warning(f"Health check failed: {health_status}")
-
-    # 这里我们直接返回JSON，因为FastAPI会自动设置状态码
-    return JSONResponse(content=health_status, status_code=status_code)
-
-
-@app.get("/metrics")
-@performance_monitor("metrics_endpoint")
-async def get_metrics() -> Any:
-    """获取系统指标"""
-    logger.info("Metrics endpoint accessed")
-
-    metrics = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": settings.app_version,
-        "uptime": "N/A",  # 实际部署中需要跟踪启动时间
-        "configuration": {
-            "environment": settings.environment.value,
-            "debug": settings.debug,
-            "default_page_size": settings.default_page_size,
-            "max_page_size": settings.max_page_size
-        }
-    }
-
-    # 添加Redis指标
-    try:
-        if redis_session_manager.redis:
-            redis_info = await redis_session_manager.redis.info()
-            metrics["redis"] = {
-                "connected": True,
-                "clients": redis_info.get("connected_clients", 0),
-                "memory_used": redis_info.get("used_memory", 0)
-            }
-        else:
-            metrics["redis"] = {"connected": False}
-    except Exception as e:
-        metrics["redis"] = {"connected": False, "error": str(e)}
-
-    return metrics
-
-
-@app.get("/config")
-async def get_config_info() -> Any:
-    """获取配置信息（敏感信息已过滤）"""
-    logger.info("Config info endpoint accessed")
-
-    # 返回非敏感的配置文件信息
-    safe_config = {
-        "app_name": settings.app_name,
-        "app_version": settings.app_version,
-        "environment": settings.environment.value,
-        "debug": settings.debug,
-        "features": {
-            "performance_monitoring": settings.get("enable_performance_monitoring", True),
-            "cache_enabled": True,
-            "async_processing": True
-        },
-        "limits": {
-            "max_upload_size": settings.max_upload_size,
-            "default_page_size": settings.default_page_size,
-            "max_page_size": settings.max_page_size
-        }
-    }
-
-    return safe_config
-
-
 if __name__ == "__main__":
+    # Lazy import uvicorn to avoid dependency if not running directly
     import uvicorn
 
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
     logger.info(f"Environment: {settings.environment.value}")
     logger.info(f"Debug mode: {settings.debug}")
 
-    # 启动开发服务器
+    # Start development server
     uvicorn.run(
         "main:app",
         host=settings.host,

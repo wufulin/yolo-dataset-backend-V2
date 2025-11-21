@@ -1,46 +1,61 @@
 #!/usr/bin/env python3
-"""更新 datasets collection 的 schema，添加 'validating' 状态"""
+"""
+Update Datasets Collection Schema - Add 'validating' Status
+Maintains backward compatibility while extending the schema with new status value
+"""
+
 import os
 import sys
+from typing import Dict, Any
 
-# Add project root directory to Python path
+# Add project root directory to Python path for module resolution
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Third-party imports
 from pymongo import MongoClient
 from pymongo.errors import OperationFailure
 
+# Project internal imports
 from app.config import settings
 from app.utils.logger import get_logger
 
+# Initialize logger
 logger = get_logger(__name__)
 
 
-def update_dataset_schema():
-    """更新 datasets collection 的 schema，添加 'validating' 状态"""
+def update_dataset_schema() -> bool:
+    """
+    Update the MongoDB 'datasets' collection schema to include 'validating' status
+    
+    Extends the status enum with 'validating' while preserving existing validation rules.
+    Maintains strict validation level for data integrity.
+    
+    Returns:
+        bool: True if schema update succeeds, False otherwise
+    """
+    # Initialize MongoDB client
     client = MongoClient(settings.mongodb_url)
     db = client[settings.mongo_db_name]
 
     try:
-        # 更新 schema，添加 'validating' 状态
-        validation = {
+        # Define updated schema validator with 'validating' status added
+        schema_validator: Dict[str, Any] = {
             '$jsonSchema': {
                 'bsonType': 'object',
                 'required': ['name', 'dataset_type', 'class_names', 'status', 'created_at', 'updated_at'],
                 'properties': {
                     'name': {
                         'bsonType': 'string',
-                        'description': 'Dataset name must be a string and is required'
+                        'description': 'Dataset name must be a non-empty string (required)'
                     },
                     'dataset_type': {
                         'enum': ['detect', 'obb', 'segment', 'pose', 'classify'],
-                        'description': 'Dataset type must be one of the supported types'
+                        'description': 'Dataset type must be one of the supported detection/classification types'
                     },
                     'class_names': {
                         'bsonType': 'array',
-                        'items': {
-                            'bsonType': 'string'
-                        },
-                        'description': 'Class names must be an array of strings'
+                        'items': {'bsonType': 'string'},
+                        'description': 'Class names must be an array of non-empty strings'
                     },
                     'num_images': {
                         'bsonType': 'int',
@@ -54,53 +69,60 @@ def update_dataset_schema():
                     },
                     'status': {
                         'enum': ['processing', 'active', 'validating', 'error', 'deleted'],
-                        'description': 'Status must be one of the allowed values'
+                        'description': 'Dataset status - added "validating" for intermediate validation phase'
                     }
                 }
             }
         }
 
-        # 更新 schema
+        # Execute schema update command
         result = db.command({
             'collMod': 'datasets',
-            'validator': validation,
+            'validator': schema_validator,
             'validationLevel': 'strict'
         })
 
         logger.info("✅ Datasets collection schema updated successfully")
-        logger.info(f"   Added 'validating' to status enum")
+        logger.info(f"   Added 'validating' to status enum values")
         return True
 
     except OperationFailure as e:
-        logger.error(f"❌ Failed to update schema: {e}")
+        logger.error(f"❌ Schema update failed (MongoDB operation error): {e}")
         return False
     except Exception as e:
-        logger.error(f"❌ Unexpected error: {e}", exc_info=True)
+        logger.error(f"❌ Unexpected error during schema update", exc_info=True)
+        logger.error(f"   Error details: {e}")
         return False
     finally:
+        # Ensure MongoDB client connection is closed
         client.close()
+        logger.debug("MongoDB client connection closed")
 
 
 if __name__ == "__main__":
+    # Print execution header
     print("=" * 60)
-    print("更新 Datasets Collection Schema")
+    print("Update Datasets Collection Schema")
     print("=" * 60)
-    print(f"数据库: {settings.mongo_db_name}")
-    print(f"连接: {settings.mongodb_url.split('@')[-1] if '@' in settings.mongodb_url else settings.mongodb_url}")
+    # Mask credentials in MongoDB URL for security
+    db_connection_display = settings.mongodb_url.split('@')[-1] if '@' in settings.mongodb_url else settings.mongodb_url
+    print(f"Target Database: {settings.mongo_db_name}")
+    print(f"MongoDB Connection: {db_connection_display}")
     print()
     
-    success = update_dataset_schema()
+    # Execute schema update
+    update_success = update_dataset_schema()
     
-    if success:
-        print("\n✅ Schema 更新成功！")
-        print("现在 status 字段支持以下值：")
-        print("  - processing")
-        print("  - active")
-        print("  - validating (新增)")
-        print("  - error")
-        print("  - deleted")
+    # Print result summary
+    if update_success:
+        print("\n✅ Schema update completed successfully!")
+        print("\nSupported status values now include:")
+        print("  - processing (dataset being processed)")
+        print("  - active (dataset ready for use)")
+        print("  - validating (new - dataset under validation)")
+        print("  - error (dataset processing failed)")
+        print("  - deleted (dataset marked as deleted)")
         sys.exit(0)
     else:
-        print("\n❌ Schema 更新失败，请检查错误信息")
+        print("\n❌ Schema update failed. Please check application logs for detailed errors.")
         sys.exit(1)
-

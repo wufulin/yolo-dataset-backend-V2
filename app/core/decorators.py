@@ -1,4 +1,4 @@
-"""装饰器模式实现 - 日志、缓存、监控等横切关注点"""
+"""Decorator implementations for logging, caching, monitoring, and other cross-cutting concerns."""
 import asyncio
 import functools
 import hashlib
@@ -20,30 +20,27 @@ from app.utils.logger import get_logger
 
 logger: logging.Logger = get_logger(__name__)
 
-# 类型变量定义
+# Type variables shared by decorators
 F = TypeVar('F', bound=Callable[..., Any])
 AsyncF = TypeVar('AsyncF', bound=Callable[..., Awaitable[Any]])
 
 
 def exception_handler(
     exception_type: type = Exception,
-    default_message: str = "操作执行失败",
+    default_message: str = "Operation failed",
     log_error: bool = True,
     reraise: bool = True,
     custom_handler: Optional[Callable[[Exception], Any]] = None
 ):
     """
-    异常处理装饰器
-    支持两种用法：
-    @exception_handler 或 @exception_handler()
-    @exception_handler(DatabaseException)
+    Exception handling decorator supporting both @exception_handler and @exception_handler().
 
     Args:
-        exception_type: 要捕获的异常类型
-        default_message: 默认错误消息
-        log_error: 是否记录错误日志
-        reraise: 是否重新抛出异常
-        custom_handler: 自定义异常处理器
+        exception_type: Exception type to capture.
+        default_message: Fallback user-facing message.
+        log_error: Whether to log the error automatically.
+        reraise: Whether to re-raise the original exception.
+        custom_handler: Optional callback to transform the exception.
     """
     def decorator(func: F) -> F:
         @wraps(func)
@@ -51,7 +48,7 @@ def exception_handler(
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                # 记录错误日志
+                # Log enriched error details
                 if log_error:
                     if isinstance(e, YOLOException):
                         logger.error(
@@ -65,14 +62,14 @@ def exception_handler(
                             exc_info=True
                         )
 
-                # 自定义异常处理
+                # Execute user-provided exception hook
                 if custom_handler:
                     try:
                         return custom_handler(e)
                     except Exception as custom_error:
                         logger.error(f"Custom exception handler failed: {custom_error}")
 
-                # 转换异常类型
+                # Normalize exception shape for consumers
                 if not isinstance(e, exception_type) and exception_type != Exception:
                     if isinstance(e, YOLOException):
                         raise e
@@ -85,7 +82,7 @@ def exception_handler(
                             original_error=e
                         )
 
-                # 重新抛出原始异常或返回默认值
+                # Bubble original exception or swallow based on config
                 if reraise:
                     raise
                 else:
@@ -93,8 +90,7 @@ def exception_handler(
 
         return wrapper  # type: ignore
 
-    # 如果第一个参数是可调用对象但不是类型（即函数），说明是 @exception_handler 的用法（无括号）
-    # 类型（如异常类）也是可调用的，所以需要排除类型
+    # Support decorator usage without parentheses while avoiding types (which are callable)
     if callable(exception_type) and not isinstance(exception_type, type):
         func = exception_type
         exception_type = Exception
@@ -105,24 +101,19 @@ def exception_handler(
 
 def async_exception_handler(
     exception_type: type = Exception,
-    default_message: str = "异步操作执行失败",
+    default_message: str = "Async operation failed",
     log_error: bool = True,
     reraise: bool = True,
     custom_handler: Optional[Callable[[Exception], Any]] = None
 ):
-    """
-    异步异常处理装饰器
-    支持两种用法：
-    @async_exception_handler 或 @async_exception_handler()
-    @async_exception_handler(DatabaseException)
-    """
+    """Async-friendly version of exception_handler with identical behavior."""
     def decorator(func: AsyncF) -> AsyncF:
         @wraps(func)
         async def wrapper(*args, **kwargs):
             try:
                 return await func(*args, **kwargs)
             except Exception as e:
-                # 记录错误日志
+                # Log enriched error details
                 if log_error:
                     if isinstance(e, YOLOException):
                         logger.error(
@@ -136,14 +127,14 @@ def async_exception_handler(
                             exc_info=True
                         )
 
-                # 自定义异常处理
+                # Execute optional handler hook
                 if custom_handler:
                     try:
                         return await custom_handler(e) if asyncio.iscoroutinefunction(custom_handler) else custom_handler(e)
                     except Exception as custom_error:
                         logger.error(f"Custom async exception handler failed: {custom_error}")
 
-                # 转换异常类型
+                # Normalize exception shape for consumers
                 if not isinstance(e, exception_type) and exception_type != Exception:
                     if isinstance(e, YOLOException):
                         raise e
@@ -156,7 +147,7 @@ def async_exception_handler(
                             original_error=e
                         )
 
-                # 重新抛出原始异常或返回默认值
+                # Bubble or swallow based on configuration
                 if reraise:
                     raise
                 else:
@@ -164,8 +155,7 @@ def async_exception_handler(
 
         return wrapper  # type: ignore
 
-    # 如果第一个参数是可调用对象但不是类型（即函数），说明是 @async_exception_handler 的用法（无括号）
-    # 类型（如异常类）也是可调用的，所以需要排除类型
+    # Support decorator usage without parentheses while avoiding type objects
     if callable(exception_type) and not isinstance(exception_type, type):
         func = exception_type
         exception_type = Exception
@@ -182,14 +172,14 @@ def performance_monitor(
     include_result: bool = False
 ):
     """
-    性能监控装饰器
+    Decorator for measuring sync function latency and flagging slow calls.
 
     Args:
-        operation_name: 操作名称（默认使用函数名）
-        log_slow_operations: 是否记录慢操作
-        slow_threshold: 慢操作阈值（秒）
-        include_args: 是否包含参数信息
-        include_result: 是否包含结果信息
+        operation_name: Custom label for the monitored operation.
+        log_slow_operations: Emit warnings when threshold is exceeded.
+        slow_threshold: Seconds beyond which the call is considered slow.
+        include_args: Attach arguments to the log payload.
+        include_result: Attach return value to the log payload.
     """
     def decorator(func: F) -> F:
         @wraps(func)
@@ -201,7 +191,7 @@ def performance_monitor(
                 result = func(*args, **kwargs)
                 execution_time = time.time() - start_time
 
-                # 记录性能日志
+                # Emit structured performance log entry
                 log_info = {
                     "operation": op_name,
                     "execution_time": execution_time,
@@ -244,9 +234,7 @@ def async_performance_monitor(
     include_args: bool = False,
     include_result: bool = False
 ):
-    """
-    异步性能监控装饰器
-    """
+    """Async equivalent of performance_monitor."""
     def decorator(func: AsyncF) -> AsyncF:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -257,7 +245,7 @@ def async_performance_monitor(
                 result = await func(*args, **kwargs)
                 execution_time = time.time() - start_time
 
-                # 记录性能日志
+                # Emit structured performance log entry
                 log_info = {
                     "operation": op_name,
                     "execution_time": execution_time,
@@ -301,14 +289,14 @@ def retry(
     exceptions: tuple = (Exception,)
 ):
     """
-    重试装饰器
+    Retry decorator with exponential backoff for synchronous functions.
 
     Args:
-        max_attempts: 最大重试次数
-        delay: 初始延迟时间（秒）
-        exponential_base: 指数退避基数
-        jitter: 是否添加随机抖动
-        exceptions: 需要重试的异常类型
+        max_attempts: Maximum number of attempts.
+        delay: Initial delay in seconds.
+        exponential_base: Base multiplier used for backoff.
+        jitter: Whether to introduce randomness to delays.
+        exceptions: Tuple of exception types that trigger retries.
     """
     def decorator(func: F) -> F:
         @wraps(func)
@@ -325,7 +313,7 @@ def retry(
                         logger.error(f"Function {func.__name__} failed after {max_attempts} attempts: {e}")
                         raise
 
-                    # 计算延迟时间
+                    # Calculate next delay duration with optional jitter
                     if attempt > 0:
                         wait_time = delay * (exponential_base ** (attempt - 1))
                         if jitter:
@@ -351,9 +339,7 @@ def async_retry(
     jitter: bool = True,
     exceptions: tuple = (Exception,)
 ):
-    """
-    异步重试装饰器
-    """
+    """Async variant of retry with identical parameters."""
     def decorator(func: AsyncF) -> AsyncF:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -369,7 +355,7 @@ def async_retry(
                         logger.error(f"Async function {func.__name__} failed after {max_attempts} attempts: {e}")
                         raise
 
-                    # 计算延迟时间
+                    # Calculate next delay duration with optional jitter
                     if attempt > 0:
                         wait_time = delay * (exponential_base ** (attempt - 1))
                         if jitter:
@@ -389,52 +375,52 @@ def async_retry(
 
 
 def cache_result(
-    ttl: int = 300,  # 默认5分钟
+    ttl: int = 300,  # Default five-minute TTL
     key_func: Optional[Callable] = None,
     max_size: Optional[int] = None
 ):
     """
-    结果缓存装饰器（简化版）
+    In-memory caching decorator with TTL and optional LRU eviction.
 
     Args:
-        ttl: 缓存时间（秒）
-        key_func: 自定义缓存键生成函数
-        max_cache_size: 最大缓存条目数
+        ttl: Cache lifetime in seconds.
+        key_func: Optional callable that builds the cache key.
+        max_size: Maximum entries to keep before evicting the oldest.
     """
     cache: Dict[str, tuple] = {}
-    cache_order: list = []  # 用于LRU
+    cache_order: list = []  # Track access order for LRU
 
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # 生成缓存键
+            # Build cache key
             if key_func:
                 cache_key = key_func(*args, **kwargs)
             else:
-                # 使用函数名和参数生成简单键
+                # Fallback hash from function name and arguments
                 key_data = f"{func.__name__}:{str(args)}:{str(kwargs)}"
                 cache_key = hashlib.md5(key_data.encode()).hexdigest()
 
-            # 检查缓存
+            # Serve cached response when still valid
             current_time = datetime.now().timestamp()
             if cache_key in cache:
                 cached_result, cached_time = cache[cache_key]
                 if current_time - cached_time < ttl:
                     logger.debug(f"Cache hit for {func.__name__}")
-                    # 更新访问顺序（LRU）
+                    # Refresh LRU order
                     if cache_key in cache_order:
                         cache_order.remove(cache_key)
                     cache_order.append(cache_key)
                     return cached_result
 
-            # 执行函数并缓存结果
+            # Compute fresh result and cache it
             result = func(*args, **kwargs)
             cache[cache_key] = (result, current_time)
             cache_order.append(cache_key)
 
-            # 检查缓存大小限制
+            # Enforce max cache size
             if max_size and len(cache) > max_size:
-                # 移除最旧的条目
+                # Drop least recently used entry
                 oldest_key = cache_order.pop(0)
                 del cache[oldest_key]
 
@@ -448,19 +434,19 @@ def cache_result(
 
 def validate_inputs(**validators):
     """
-    输入验证装饰器
+    Decorator for declarative parameter validation.
 
     Args:
-        **validators: 参数名到验证函数的映射
+        **validators: Mapping from parameter name to validation callable.
     """
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # 合并位置参数和关键字参数
+            # Merge positional + keyword arguments
             bound_args = inspect.signature(func).bind(*args, **kwargs)
             bound_args.apply_defaults()
 
-            # 验证参数
+            # Execute validators
             for param_name, validator in validators.items():
                 if param_name in bound_args.arguments:
                     value = bound_args.arguments[param_name]
@@ -480,17 +466,17 @@ def log_method_call(
     include_result: bool = False
 ):
     """
-    方法调用日志装饰器
+    Decorator for logging method invocation metadata.
 
     Args:
-        log_level: 日志级别
-        include_args: 是否记录参数
-        include_result: 是否记录返回值
+        log_level: Logging level for emitted records.
+        include_args: Whether to log arguments.
+        include_result: Whether to log return value.
     """
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # 记录调用信息
+            # Build logging payload
             log_info = {
                 "function": f"{func.__module__}.{func.__name__}",
                 "timestamp": datetime.now().isoformat()
@@ -529,5 +515,5 @@ def log_method_call(
     return decorator
 
 
-# 导入inspect模块（在函数内部使用）
+# Import inspect lazily to avoid circular dependencies
 import inspect

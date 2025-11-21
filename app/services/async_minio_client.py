@@ -1,4 +1,4 @@
-"""异步MinIO客户端实现"""
+"""Asynchronous MinIO client implementation with chunked uploads and progress tracking."""
 import asyncio
 import io
 import json
@@ -23,7 +23,7 @@ logger: logging.Logger = get_logger(__name__)
 
 @dataclass
 class UploadProgress:
-    """上传进度信息"""
+    """Progress metadata reported during uploads."""
     object_name: str
     uploaded_bytes: int
     total_bytes: int
@@ -33,7 +33,7 @@ class UploadProgress:
 
 @dataclass
 class ChunkInfo:
-    """分片信息"""
+    """Metadata about individual chunks in a multipart upload."""
     chunk_id: int
     offset: int
     size: int
@@ -42,7 +42,7 @@ class ChunkInfo:
     retry_count: int = 0
 
 class AsyncMinioClient:
-    """异步MinIO客户端"""
+    """Async MinIO client offering chunked uploads, resumable sessions, and progress updates."""
 
     def __init__(
         self,
@@ -57,18 +57,18 @@ class AsyncMinioClient:
         connection_pool_size: int = 100
     ):
         """
-        初始化异步MinIO客户端
+        Initialize asynchronous MinIO client wrapper.
 
         Args:
-            endpoint: MinIO服务器地址
-            access_key: 访问密钥
-            secret_key: 密钥
-            secure: 是否使用HTTPS
-            chunk_size: 分片大小（默认100MB）
-            max_workers: 最大并发数
-            max_retries: 最大重试次数
-            retry_delay: 重试延迟
-            connection_pool_size: 连接池大小
+            endpoint: MinIO server endpoint.
+            access_key: Access key credential.
+            secret_key: Secret key credential.
+            secure: Whether to use TLS/HTTPS.
+            chunk_size: Chunk size in bytes (default 100MB).
+            max_workers: Max concurrent chunk uploads.
+            max_retries: Retry attempts per chunk.
+            retry_delay: Base delay for retry backoff.
+            connection_pool_size: aiohttp connection pool size.
         """
         self.endpoint = endpoint
         self.access_key = access_key
@@ -80,7 +80,7 @@ class AsyncMinioClient:
         self.retry_delay = retry_delay
         self.connection_pool_size = connection_pool_size
 
-        # 创建MinIO客户端
+        # Create underlying MinIO client
         self.client = Minio(
             endpoint,
             access_key=access_key,
@@ -88,15 +88,15 @@ class AsyncMinioClient:
             secure=secure
         )
 
-        # 创建HTTP会话池
+        # aiohttp session placeholder (initialized in __aenter__)
         self.session = None
 
-        # 上传会话存储（用于断点续传）
+        # Upload session store (used for resumable uploads)
         self.upload_sessions = {}
 
     async def __aenter__(self):
-        """异步上下文管理器入口"""
-        # 创建aiohttp会话
+        """Async context manager entrypoint."""
+        # Create aiohttp session
         connector = aiohttp.TCPConnector(
             limit=self.connection_pool_size,
             limit_per_host=50,
@@ -113,12 +113,12 @@ class AsyncMinioClient:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """异步上下文管理器出口"""
+        """Async context manager exit cleanup."""
         if self.session:
             await self.session.close()
 
     async def ensure_bucket_exists(self, bucket_name: str) -> bool:
-        """确保bucket存在"""
+        """Ensure specified bucket exists, creating it if necessary."""
         try:
             if not self.client.bucket_exists(bucket_name):
                 logger.info(f"Creating bucket: {bucket_name}")
@@ -138,22 +138,22 @@ class AsyncMinioClient:
         progress_callback: Optional[Callable[[UploadProgress], None]] = None
     ) -> Dict[str, Any]:
         """
-        带进度追踪的文件上传
+        Upload a file while emitting progress callbacks.
 
         Args:
-            file_path: 本地文件路径
-            bucket_name: bucket名称
-            object_name: 对象名称
-            content_type: MIME类型
-            progress_callback: 进度回调函数
+            file_path: Local source path.
+            bucket_name: Target bucket name.
+            object_name: Target object name.
+            content_type: MIME type applied to object.
+            progress_callback: Optional progress callback.
 
         Returns:
-            上传结果字典
+            dict describing upload outcome.
         """
         try:
             file_size = os.path.getsize(file_path)
 
-            # 检查文件大小，决定是否使用分片上传
+            # Choose small-file vs multipart strategy
             if file_size <= self.chunk_size:
                 return await self._upload_small_file(
                     file_path, bucket_name, object_name, content_type, progress_callback
@@ -181,23 +181,23 @@ class AsyncMinioClient:
         content_type: str,
         progress_callback: Optional[Callable[[UploadProgress], None]]
     ) -> Dict[str, Any]:
-        """上传小文件（单片）"""
+        """Upload small files in a single request."""
         start_time = time.time()
         uploaded_bytes = 0
 
         try:
-            # 读取文件并计算大小
+            # Determine file size
             file_size = os.path.getsize(file_path)
 
             async with aiofiles.open(file_path, 'rb') as file:
-                # 读取文件内容
+                # Read entire file contents
                 file_data = await file.read()
                 uploaded_bytes = len(file_data)
 
-                # 将 bytes 包装成 file-like 对象（MinIO put_object 需要 file-like 对象）
+                # Wrap bytes in file-like object (MinIO put_object expects file-like)
                 file_like = io.BytesIO(file_data)
 
-                # 在线程池中运行同步的 put_object（避免阻塞事件循环）
+                # Run blocking put_object in executor to avoid blocking event loop
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(
                     None,
@@ -213,7 +213,7 @@ class AsyncMinioClient:
             upload_time = time.time() - start_time
             speed_mbps = (uploaded_bytes / (1024 * 1024)) / upload_time if upload_time > 0 else 0
 
-            # 调用进度回调
+            # Emit progress callback
             if progress_callback:
                 progress = UploadProgress(
                     object_name=object_name,
@@ -233,7 +233,7 @@ class AsyncMinioClient:
                 "total_bytes": file_size,
                 "upload_time": upload_time,
                 "speed_mbps": speed_mbps,
-                "etag": None  # 需要额外调用stat_object获取
+                "etag": None  # requires separate stat_object call to fetch
             }
 
         except Exception as e:
@@ -255,14 +255,14 @@ class AsyncMinioClient:
         content_type: str,
         progress_callback: Optional[Callable[[UploadProgress], None]]
     ) -> Dict[str, Any]:
-        """上传大文件（分片并行上传）"""
+        """Upload large files using multipart/chunked strategy."""
         start_time = time.time()
         file_size = os.path.getsize(file_path)
 
-        # 创建分片信息
+        # Build chunk metadata list
         chunks = self._create_chunks(file_path, file_size)
 
-        # 初始化上传会话
+        # Initialize session tracking
         session_id = f"{bucket_name}/{object_name}/{int(time.time())}"
         self.upload_sessions[session_id] = {
             "bucket_name": bucket_name,
@@ -277,25 +277,25 @@ class AsyncMinioClient:
         }
 
         try:
-            # 创建上传ID
+            # Initialize multipart upload id
             upload_id = self.client.client.create_multipart_upload(
                 bucket_name, object_name
             ).upload_id
 
             self.upload_sessions[session_id]["upload_id"] = upload_id
 
-            # 并行上传分片
+            # Upload chunks concurrently
             await self._upload_chunks_parallel(
                 session_id, progress_callback
             )
 
-            # 完成上传
+            # Complete multipart upload
             etag = await self._complete_multipart_upload(session_id)
 
             upload_time = time.time() - start_time
             speed_mbps = (file_size / (1024 * 1024)) / upload_time if upload_time > 0 else 0
 
-            # 清理会话
+            # Clean up session tracking
             del self.upload_sessions[session_id]
 
             return {
@@ -313,7 +313,7 @@ class AsyncMinioClient:
         except Exception as e:
             logger.error(f"Large file upload failed: {e}")
 
-            # 尝试清理部分上传
+            # Attempt to abort partial upload if necessary
             if "upload_id" in self.upload_sessions.get(session_id, {}):
                 try:
                     self.client.client.abort_multipart_upload(
@@ -323,7 +323,7 @@ class AsyncMinioClient:
                 except Exception as cleanup_error:
                     logger.warning(f"Failed to cleanup multipart upload: {cleanup_error}")
 
-            # 清理会话
+            # Remove session tracking
             if session_id in self.upload_sessions:
                 del self.upload_sessions[session_id]
 
@@ -338,7 +338,7 @@ class AsyncMinioClient:
             }
 
     def _create_chunks(self, file_path: str, file_size: int) -> List[ChunkInfo]:
-        """创建分片信息"""
+        """Generate chunk metadata for multipart upload."""
         chunks = []
         chunk_id = 1
 
@@ -358,34 +358,34 @@ class AsyncMinioClient:
         session_id: str,
         progress_callback: Optional[Callable[[UploadProgress], None]]
     ):
-        """并行上传分片"""
+        """Upload all chunks concurrently using bounded semaphore."""
         session = self.upload_sessions[session_id]
         chunks = session["chunks"]
 
-        # 创建信号量限制并发数
+        # Bound concurrency with semaphore
         semaphore = asyncio.Semaphore(self.max_workers)
 
         async def upload_chunk_with_semaphore(chunk: ChunkInfo):
             async with semaphore:
                 return await self._upload_single_chunk(session_id, chunk, progress_callback)
 
-        # 创建上传任务
+        # Create upload tasks
         tasks = [
             upload_chunk_with_semaphore(chunk)
             for chunk in chunks
         ]
 
-        # 并行执行所有上传任务
+        # Await completion of all chunk uploads
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # 处理结果
+        # Identify failed chunks
         failed_chunks = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 failed_chunks.append(chunks[i])
                 logger.error(f"Chunk {chunks[i].chunk_id} failed: {result}")
 
-        # 重试失败的chunks
+        # Retry failed chunks individually
         await self._retry_failed_chunks(session_id, failed_chunks, progress_callback)
 
     async def _upload_single_chunk(
@@ -394,7 +394,7 @@ class AsyncMinioClient:
         chunk: ChunkInfo,
         progress_callback: Optional[Callable[[UploadProgress], None]]
     ) -> bool:
-        """上传单个分片"""
+        """Upload a single chunk with retries and progress updates."""
         session = self.upload_sessions[session_id]
         bucket_name = session["bucket_name"]
         object_name = session["object_name"]
@@ -403,12 +403,12 @@ class AsyncMinioClient:
 
         for attempt in range(self.max_retries + 1):
             try:
-                # 读取分片数据
+                # Read chunk bytes
                 async with aiofiles.open(file_path, 'rb') as file:
                     await file.seek(chunk.offset)
                     chunk_data = await file.read(chunk.size)
 
-                # 上传分片
+                # Upload chunk part
                 result = self.client.client.put_object_part(
                     bucket_name,
                     object_name,
@@ -418,16 +418,16 @@ class AsyncMinioClient:
                     len(chunk_data)
                 )
 
-                # 更新chunk状态
+                # Update chunk metadata
                 chunk.etag = result.etag
                 chunk.uploaded = True
                 chunk.retry_count = attempt
 
-                # 更新会话状态
+                # Update session counters
                 session["uploaded_chunks"] += 1
                 session["uploaded_bytes"] += chunk.size
 
-                # 调用进度回调
+                # Emit progress callback
                 if progress_callback:
                     progress = self._calculate_progress(session)
                     progress_callback(progress)
@@ -440,7 +440,7 @@ class AsyncMinioClient:
                     f"Chunk {chunk.chunk_id} upload attempt {attempt + 1} failed: {e}"
                 )
                 if attempt < self.max_retries:
-                    await asyncio.sleep(self.retry_delay * (2 ** attempt))  # 指数退避
+                    await asyncio.sleep(self.retry_delay * (2 ** attempt))  # exponential backoff
                 else:
                     logger.error(f"Chunk {chunk.chunk_id} failed after {self.max_retries} retries")
                     return False
@@ -453,7 +453,7 @@ class AsyncMinioClient:
         failed_chunks: List[ChunkInfo],
         progress_callback: Optional[Callable[[UploadProgress], None]]
     ):
-        """重试失败的分片"""
+        """Retry uploading chunks that previously failed."""
         if not failed_chunks:
             return
 
@@ -465,18 +465,18 @@ class AsyncMinioClient:
                 raise Exception(f"Failed to upload chunk {chunk.chunk_id} after all retries")
 
     def _calculate_progress(self, session: Dict) -> UploadProgress:
-        """计算上传进度"""
+        """Calculate overall progress for the given session."""
         uploaded_bytes = session["uploaded_bytes"]
         total_bytes = session["total_bytes"]
         start_time = session["start_time"]
 
         percentage = (uploaded_bytes / total_bytes) * 100 if total_bytes > 0 else 0
 
-        # 计算速度
+        # Calculate speed
         elapsed_time = time.time() - start_time
         speed_mbps = (uploaded_bytes / (1024 * 1024)) / elapsed_time if elapsed_time > 0 else 0
 
-        # 计算预计剩余时间
+        # Estimate remaining time
         if speed_mbps > 0:
             remaining_bytes = total_bytes - uploaded_bytes
             eta_seconds = remaining_bytes / (speed_mbps * 1024 * 1024)
@@ -493,26 +493,26 @@ class AsyncMinioClient:
         )
 
     async def _complete_multipart_upload(self, session_id: str) -> str:
-        """完成分片上传"""
+        """Finalize multipart upload by committing all parts."""
         session = self.upload_sessions[session_id]
         bucket_name = session["bucket_name"]
         object_name = session["object_name"]
         chunks = session["chunks"]
         upload_id = session["upload_id"]
 
-        # 收集已上传的chunks
+        # Collect uploaded chunk metadata
         uploaded_chunks = [
             (chunk.chunk_id, chunk.etag)
             for chunk in chunks if chunk.uploaded and chunk.etag
         ]
 
-        # 按chunk_id排序
+        # Sort parts by chunk id
         uploaded_chunks.sort(key=lambda x: x[0])
 
         if len(uploaded_chunks) != len(chunks):
             raise Exception(f"Not all chunks uploaded: {len(uploaded_chunks)}/{len(chunks)}")
 
-        # 完成上传
+        # Complete multipart upload
         result = self.client.client.complete_multipart_upload(
             bucket_name,
             object_name,
@@ -528,7 +528,7 @@ class AsyncMinioClient:
         bucket_name: str,
         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None
     ) -> Dict[str, Any]:
-        """并行上传多个文件"""
+        """Upload multiple files in parallel with per-file progress callbacks."""
 
         async def upload_single_file(args) -> Dict[str, Any]:
             file_path, object_name, content_type = args
@@ -536,20 +536,20 @@ class AsyncMinioClient:
                 file_path, bucket_name, object_name, content_type, progress_callback
             )
 
-        # 创建信号量限制并发数
+        # Limit concurrency via semaphore
         semaphore = asyncio.Semaphore(self.max_workers)
 
         async def upload_with_semaphore(args):
             async with semaphore:
                 return await upload_single_file(args)
 
-        # 创建上传任务
+        # Build upload tasks
         tasks = [upload_with_semaphore(file_info) for file_info in files]
 
-        # 并行执行
+        # Execute uploads concurrently
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # 统计结果
+        # Aggregate success/failure results
         successful = []
         failed = []
 
@@ -579,7 +579,7 @@ class AsyncMinioClient:
         object_name: str,
         expires: int = 3600
     ) -> Optional[str]:
-        """获取预签名URL"""
+        """Generate a presigned GET URL for an object."""
         try:
             url = self.client.presigned_get_object(
                 bucket_name,
@@ -592,7 +592,7 @@ class AsyncMinioClient:
             return None
 
     async def get_file_stat(self, bucket_name: str, object_name: str) -> Optional[Dict]:
-        """获取文件状态"""
+        """Return metadata/statistics for an object."""
         try:
             stat = self.client.stat_object(bucket_name, object_name)
             return {
@@ -608,7 +608,7 @@ class AsyncMinioClient:
             return None
 
     async def delete_file(self, bucket_name: str, object_name: str) -> bool:
-        """删除文件"""
+        """Delete an object asynchronously (still calls sync SDK)."""
         try:
             self.client.remove_object(bucket_name, object_name)
             return True
@@ -622,7 +622,7 @@ class AsyncMinioClient:
         prefix: str = "",
         max_keys: int = 1000
     ) -> List[Dict]:
-        """列出对象"""
+        """List objects under a prefix."""
         try:
             objects = []
             for obj in self.client.list_objects(bucket_name, prefix=prefix, recursive=True):
@@ -641,7 +641,7 @@ class AsyncMinioClient:
             return []
 
     async def resume_upload(self, session_id: str) -> Dict[str, Any]:
-        """恢复上传会话"""
+        """Resume previously started multipart upload."""
         if session_id not in self.upload_sessions:
             raise ValueError(f"Session {session_id} not found")
 
@@ -652,40 +652,40 @@ class AsyncMinioClient:
         content_type = session["content_type"]
 
         try:
-            # 获取已上传的分片
+            # Query already uploaded parts
             upload_id = session["upload_id"]
 
-            # 列出已上传的分片
+            # List uploaded parts from MinIO
             uploaded_parts = self.client.client.list_multipart_parts(
                 bucket_name, object_name, upload_id
             )
 
             uploaded_part_numbers = {part.part_number for part in uploaded_parts}
 
-            # 更新chunks状态
+            # Mark chunks as uploaded based on part list
             for chunk in session["chunks"]:
                 if chunk.chunk_id in uploaded_part_numbers:
                     chunk.uploaded = True
 
-            # 继续上传未完成的分片
+            # Continue uploading pending chunks
             pending_chunks = [chunk for chunk in session["chunks"] if not chunk.uploaded]
 
             if pending_chunks:
                 logger.info(f"Resuming upload with {len(pending_chunks)} pending chunks")
 
-                # 创建一个空的progress回调（不输出进度）
+                # Use a no-op progress callback
                 async def no_progress(progress):
                     pass
 
                 await self._upload_chunks_parallel(session_id, no_progress)
 
-            # 完成上传
+            # Finalize multipart upload
             etag = await self._complete_multipart_upload(session_id)
 
             upload_time = time.time() - session["start_time"]
             speed_mbps = (session["total_bytes"] / (1024 * 1024)) / upload_time
 
-            # 清理会话
+            # Remove session tracking
             del self.upload_sessions[session_id]
 
             return {
@@ -709,17 +709,17 @@ class AsyncMinioClient:
             }
 
     def save_upload_session(self, session_id: str, filepath: str):
-        """保存上传会话到文件"""
+        """Persist upload session metadata to disk."""
         if session_id in self.upload_sessions:
             session_data = self.upload_sessions[session_id].copy()
-            # 不保存文件对象，只保存基本信息
+            # Remove non-serializable fields
             session_data.pop('chunks', None)
 
             with open(filepath, 'w') as f:
                 json.dump(session_data, f, indent=2, default=str)
 
     def load_upload_session(self, session_id: str, filepath: str) -> bool:
-        """从文件加载上传会话"""
+        """Load upload session metadata from disk."""
         try:
             with open(filepath, 'r') as f:
                 session_data = json.load(f)

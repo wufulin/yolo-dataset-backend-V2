@@ -81,7 +81,7 @@ async def start_upload(
             detail="Failed to create upload session"
         )
 
-    logger.info(f"创建上传会话: {upload_id} (用户: {username})")
+    logger.info("Created upload session %s for user %s", upload_id, username)
 
     return UploadResponse(
         upload_id=upload_id,
@@ -126,7 +126,7 @@ async def upload_chunk(
     # Check if chunk already exists (for recovery)
     received_chunks = session.get("received_chunks", set())
     if chunk_index in received_chunks:
-        logger.info(f"分片已存在: {upload_id}:{chunk_index}")
+        logger.info("Chunk already present for %s:%s", upload_id, chunk_index)
         return {"status": "success", "chunk": chunk_index, "recovered": True}
 
     # Save chunk
@@ -145,11 +145,11 @@ async def upload_chunk(
                 detail="Failed to update upload session"
             )
 
-        logger.info(f"分片上传成功: {upload_id}:{chunk_index}")
+        logger.info("Chunk %s uploaded for session %s", chunk_index, upload_id)
         return {"status": "success", "chunk": chunk_index}
 
     except Exception as e:
-        logger.error(f"分片上传失败 {upload_id}:{chunk_index}: {e}")
+        logger.error("Chunk upload failed for %s:%s: %s", upload_id, chunk_index, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to save chunk: {str(e)}"
@@ -206,13 +206,13 @@ async def complete_upload(
         # Cleanup session after successful processing
         # await cleanup_session(upload_id)
 
-        logger.info(f"文件上传完成: {upload_id}")
+        logger.info("Upload completed for session %s", upload_id)
         return result
 
     except Exception as e:
         # Cleanup on error
         await cleanup_session(upload_id)
-        logger.error(f"文件处理失败 {upload_id}: {e}")
+        logger.error("Dataset processing failed for session %s: %s", upload_id, e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process dataset: {str(e)}"
@@ -281,7 +281,7 @@ async def recover_upload_session(
     # Get received chunks
     received_chunks = session.get("received_chunks", set())
 
-    logger.info(f"会话恢复成功: {upload_id}")
+    logger.info("Upload recovery succeeded for session %s", upload_id)
 
     return {
         "status": "recovered",
@@ -319,7 +319,7 @@ async def cancel_upload(
             detail="Upload session not found"
         )
 
-    logger.info(f"上传已取消: {upload_id}")
+    logger.info("Upload cancelled for session %s", upload_id)
     return {"status": "cancelled", "upload_id": upload_id}
 
 
