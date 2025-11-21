@@ -185,12 +185,14 @@ class UploadService:
         finally:
             # Clean up temporary files created during processing
             try:
-                if dataset_root and dataset_root.exists():
+                if dataset_root and Path(dataset_root).exists():
                     safe_remove(dataset_root)
-                    if dataset_root.parent.exists():
-                        safe_remove(dataset_root.parent)
-                if zip_path:
+                if zip_path and Path(zip_path).exists():
                     safe_remove(zip_path)
+
+                if Path(zip_path).parent.exists():
+                    safe_remove(Path(zip_path).parent)
+
                 logger.debug(
                     "Cleaned up temporary files: %s, %s",
                     dataset_root,
