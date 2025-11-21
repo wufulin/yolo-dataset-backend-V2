@@ -518,13 +518,8 @@ class ImageService:
             if split:
                 query["split"] = split
 
-            # Optimize query with projection
-            default_projection = {"_id": 0}  # Exclude _id by default
-            if projection:
-                default_projection.update(projection)
-
             start_time = time.time()
-            cursor = self.images.find(query, default_projection).skip(skip).limit(limit).sort("created_at", -1)
+            cursor = self.images.find(query).skip(skip).limit(limit).sort("created_at", -1)
 
             images = []
             for image in cursor:
