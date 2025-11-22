@@ -21,6 +21,7 @@ from app.utils.logger import get_logger
 
 logger: logging.Logger = get_logger(__name__)
 
+
 @dataclass
 class UploadProgress:
     """Progress metadata reported during uploads."""
@@ -31,6 +32,7 @@ class UploadProgress:
     speed_mbps: float
     eta_seconds: float
 
+
 @dataclass
 class ChunkInfo:
     """Metadata about individual chunks in a multipart upload."""
@@ -40,6 +42,7 @@ class ChunkInfo:
     etag: Optional[str] = None
     uploaded: bool = False
     retry_count: int = 0
+
 
 class AsyncMinioClient:
     """Async MinIO client offering chunked uploads, resumable sessions, and progress updates."""

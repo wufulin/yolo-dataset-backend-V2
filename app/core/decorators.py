@@ -42,6 +42,7 @@ def exception_handler(
         reraise: Whether to re-raise the original exception.
         custom_handler: Optional callback to transform the exception.
     """
+
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -95,7 +96,7 @@ def exception_handler(
         func = exception_type
         exception_type = Exception
         return decorator(func)  # type: ignore
-    
+
     return decorator
 
 
@@ -107,6 +108,7 @@ def async_exception_handler(
     custom_handler: Optional[Callable[[Exception], Any]] = None
 ):
     """Async-friendly version of exception_handler with identical behavior."""
+
     def decorator(func: AsyncF) -> AsyncF:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -130,7 +132,8 @@ def async_exception_handler(
                 # Execute optional handler hook
                 if custom_handler:
                     try:
-                        return await custom_handler(e) if asyncio.iscoroutinefunction(custom_handler) else custom_handler(e)
+                        return await custom_handler(e) if asyncio.iscoroutinefunction(
+                            custom_handler) else custom_handler(e)
                     except Exception as custom_error:
                         logger.error(f"Custom async exception handler failed: {custom_error}")
 
@@ -160,7 +163,7 @@ def async_exception_handler(
         func = exception_type
         exception_type = Exception
         return decorator(func)  # type: ignore
-    
+
     return decorator
 
 
@@ -181,6 +184,7 @@ def performance_monitor(
         include_args: Attach arguments to the log payload.
         include_result: Attach return value to the log payload.
     """
+
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -235,6 +239,7 @@ def async_performance_monitor(
     include_result: bool = False
 ):
     """Async equivalent of performance_monitor."""
+
     def decorator(func: AsyncF) -> AsyncF:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -298,6 +303,7 @@ def retry(
         jitter: Whether to introduce randomness to delays.
         exceptions: Tuple of exception types that trigger retries.
     """
+
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -340,6 +346,7 @@ def async_retry(
     exceptions: tuple = (Exception,)
 ):
     """Async variant of retry with identical parameters."""
+
     def decorator(func: AsyncF) -> AsyncF:
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -439,6 +446,7 @@ def validate_inputs(**validators):
     Args:
         **validators: Mapping from parameter name to validation callable.
     """
+
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -473,6 +481,7 @@ def log_method_call(
         include_args: Whether to log arguments.
         include_result: Whether to log return value.
     """
+
     def decorator(func: F) -> F:
         @wraps(func)
         def wrapper(*args, **kwargs):

@@ -46,9 +46,10 @@ class DatabaseService:
             cls._instance = super(DatabaseService, cls).__new__(cls)
         return cls._instance
 
-    @exception_handler(DatabaseException, "数据库服务初始化失败")
+    @exception_handler(DatabaseException, "Database service initialization failed.")
     @performance_monitor("database_service_init")
-    def __init__(self, max_pool_size: Optional[int] = None, retry_writes: Optional[bool] = None, max_idle_time_ms: Optional[int] = None):
+    def __init__(self, max_pool_size: Optional[int] = None, retry_writes: Optional[bool] = None,
+                 max_idle_time_ms: Optional[int] = None):
         """Initialize MongoDB clients with connection pooling."""
         # Prevent re-initialization if already initialized
         if hasattr(self, 'sync_client'):
@@ -134,7 +135,7 @@ class DatabaseService:
         }
 
         # Create indexes
-        self._ensure_indexes()
+        # self._ensure_indexes()
 
         # Test connection
         self._test_connection()
@@ -176,28 +177,35 @@ class DatabaseService:
             indexes_to_create = [
                 # Dataset indexes
                 ("datasets", [("name", 1)], {"unique": True, "background": True, "name": "dataset_name_unique"}),
-                ("datasets", [("user_id", 1), ("created_at", -1)], {"background": True, "name": "dataset_user_created"}),
+                (
+                "datasets", [("user_id", 1), ("created_at", -1)], {"background": True, "name": "dataset_user_created"}),
                 ("datasets", [("status", 1)], {"background": True, "name": "dataset_status"}),
 
                 # Image indexes (high performance)
                 ("images", [("dataset_id", 1)], {"background": True, "name": "image_dataset"}),
                 ("images", [("dataset_id", 1), ("split", 1)], {"background": True, "name": "image_dataset_split"}),
-                ("images", [("dataset_id", 1), ("filename", 1)], {"unique": True, "background": True, "name": "image_dataset_filename_unique"}),
+                ("images", [("dataset_id", 1), ("filename", 1)],
+                 {"unique": True, "background": True, "name": "image_dataset_filename_unique"}),
                 ("images", [("created_at", -1)], {"background": True, "name": "image_created_at"}),
-                ("images", [("metadata.width", 1), ("metadata.height", 1)], {"background": True, "name": "image_metadata_dims"}),
+                ("images", [("metadata.width", 1), ("metadata.height", 1)],
+                 {"background": True, "name": "image_metadata_dims"}),
 
                 # Annotation indexes
                 ("annotations", [("image_id", 1)], {"background": True, "name": "annotation_image"}),
-                ("annotations", [("dataset_id", 1), ("class_name", 1)], {"background": True, "name": "annotation_dataset_class"}),
-                ("annotations", [("image_id", 1), ("class_name", 1)], {"background": True, "name": "annotation_image_class"}),
+                ("annotations", [("dataset_id", 1), ("class_name", 1)],
+                 {"background": True, "name": "annotation_dataset_class"}),
+                ("annotations", [("image_id", 1), ("class_name", 1)],
+                 {"background": True, "name": "annotation_image_class"}),
                 ("annotations", [("created_at", -1)], {"background": True, "name": "annotation_created_at"}),
 
                 # Upload session indexes
-                ("upload_sessions", [("user_id", 1), ("status", 1)], {"background": True, "name": "upload_session_user_status"}),
+                ("upload_sessions", [("user_id", 1), ("status", 1)],
+                 {"background": True, "name": "upload_session_user_status"}),
                 ("upload_sessions", [("created_at", -1)], {"background": True, "name": "upload_session_created"}),
 
                 # Dataset statistics indexes
-                ("dataset_statistics", [("dataset_id", 1)], {"unique": True, "background": True, "name": "dataset_stats_dataset_unique"}),
+                ("dataset_statistics", [("dataset_id", 1)],
+                 {"unique": True, "background": True, "name": "dataset_stats_dataset_unique"}),
                 ("dataset_statistics", [("last_updated", -1)], {"background": True, "name": "dataset_stats_updated"}),
 
                 # User indexes
@@ -224,7 +232,8 @@ class DatabaseService:
         pass
 
     # Async versions of common operations
-    async def async_find_one(self, collection: AsyncIOMotorCollection, filter_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    async def async_find_one(self, collection: AsyncIOMotorCollection, filter_dict: Dict[str, Any]) -> Optional[
+        Dict[str, Any]]:
         """Async version of find_one with performance tracking."""
         start_time = time.time()
         try:
@@ -242,7 +251,8 @@ class DatabaseService:
             raise
 
     async def async_find_many(self, collection: AsyncIOMotorCollection, filter_dict: Dict[str, Any],
-                            skip: int = 0, limit: int = 100, sort: Optional[List[tuple]] = None) -> List[Dict[str, Any]]:
+                              skip: int = 0, limit: int = 100, sort: Optional[List[tuple]] = None) -> List[
+        Dict[str, Any]]:
         """Async version of find with performance tracking."""
         start_time = time.time()
         try:
@@ -284,9 +294,9 @@ class DatabaseService:
             raise
 
     async def bulk_insert_optimized(self, collection: AsyncIOMotorCollection,
-                                  documents: List[Dict[str, Any]],
-                                  batch_size: int = 1000,
-                                  ordered: bool = False) -> Dict[str, Any]:
+                                    documents: List[Dict[str, Any]],
+                                    batch_size: int = 1000,
+                                    ordered: bool = False) -> Dict[str, Any]:
         """
         Optimized bulk insert with batching and error handling.
 
@@ -421,7 +431,7 @@ class DatabaseService:
         """Get performance statistics."""
         avg_query_time = self.query_stats.get('average_query_time', 0.0)
         slow_query_rate = (self.query_stats.get('slow_queries', 0) /
-                          max(self.query_stats.get('total_queries', 1), 1))
+                           max(self.query_stats.get('total_queries', 1), 1))
 
         return {
             **self.query_stats,

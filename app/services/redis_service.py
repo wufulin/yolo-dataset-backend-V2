@@ -42,11 +42,11 @@ class RedisSessionManager:
             # Prefer redis_url when provided, otherwise fall back to host/port
             redis_url_value = getattr(settings, 'redis_url', None) or ""
             redis_url_value = redis_url_value.strip() if redis_url_value else ""
-            
+
             # Use URL if defined and not the default localhost DSN;
             # even localhost should use URL if user explicitly configures it
             use_url = bool(redis_url_value and redis_url_value != "redis://localhost:6379/0")
-            
+
             # Emit config details for troubleshooting
             logger.info(
                 "Redis configuration: redis_url=%s, redis_host=%s, redis_port=%s, using_url=%s",
@@ -55,7 +55,7 @@ class RedisSessionManager:
                 settings.redis_port,
                 use_url,
             )
-            
+
             if use_url:
                 # Build client from URL (single-node Redis)
                 # Mask password in logs
@@ -96,7 +96,7 @@ class RedisSessionManager:
 
             # Verify connectivity
             await self.redis.ping()
-            
+
             # Ensure instance is writable (single-node Redis should allow writes)
             test_key = f"__test_write_{int(time.time())}"
             try:
@@ -182,7 +182,7 @@ class RedisSessionManager:
             if timeout == nil or timeout <= 0 then
                 return redis.error_reply("Invalid timeout value")
             end
-            
+
             if redis.call("SET", KEYS[1], ARGV[2], "EX", timeout, "NX") then
                 return 1
             else
@@ -290,13 +290,13 @@ class RedisSessionManager:
                     key_str = key.decode('utf-8')
                 else:
                     key_str = str(key)
-                
+
                 # Decode value if needed
                 if isinstance(value, bytes):
                     value_str = value.decode('utf-8')
                 else:
                     value_str = str(value) if value is not None else None
-                
+
                 session_data[key_str] = value_str
 
             # Cast numeric fields to integers
@@ -450,7 +450,7 @@ class RedisSessionManager:
             lock_timeout_int = int(lock_timeout)
             if lock_timeout_int <= 0:
                 raise ValueError(f"Invalid lock timeout: {lock_timeout_int}")
-            
+
             # Acquire lock via Lua script (KEYS[1]=lock_key, ARGV[1]=timeout, ARGV[2]=request_id)
             result = await self.redis.evalsha(
                 self.lock_script_sha,

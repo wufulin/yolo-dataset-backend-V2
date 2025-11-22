@@ -35,6 +35,7 @@ ImageFormat = Literal['JPEG', 'JPG', 'PNG', 'BMP', 'TIFF', 'WEBP']
 # File handling literals
 FileType = Literal['image', 'annotation', 'config', 'archive']
 
+
 # API response types
 class APIResponse(TypedDict):
     """Standard API response envelope."""
@@ -43,6 +44,7 @@ class APIResponse(TypedDict):
     data: Optional[Any]
     timestamp: datetime
     request_id: Optional[str]
+
 
 class PaginationResponse(TypedDict, Generic[ResponseType]):
     """Paginated API response envelope."""
@@ -54,11 +56,13 @@ class PaginationResponse(TypedDict, Generic[ResponseType]):
     has_next: bool
     has_prev: bool
 
+
 class SuccessResponse(TypedDict, Generic[ResponseType]):
     """Success response payload."""
     success: Literal[True]
     data: ResponseType
     message: str
+
 
 class ErrorResponse(TypedDict):
     """Error response payload."""
@@ -67,12 +71,14 @@ class ErrorResponse(TypedDict):
     message: str
     details: Optional[Dict[str, Any]]
 
+
 class ValidationErrorResponse(TypedDict):
     """Validation error payload."""
     success: Literal[False]
     error_code: Literal['VALIDATION_ERROR']
     message: str
     field_errors: Dict[str, List[str]]
+
 
 # Database model configuration types
 class MongoDBConfig(TypedDict):
@@ -83,6 +89,7 @@ class MongoDBConfig(TypedDict):
     max_idle_time_ms: int
     retry_writes: bool
 
+
 class StorageConfig(TypedDict):
     """Object storage configuration snapshot."""
     endpoint: str
@@ -91,6 +98,7 @@ class StorageConfig(TypedDict):
     bucket_name: str
     secure: bool
 
+
 class CacheConfig(TypedDict):
     """Cache/Redis configuration snapshot."""
     host: str
@@ -98,6 +106,7 @@ class CacheConfig(TypedDict):
     db: int
     password: Optional[str]
     max_connections: int
+
 
 # File processing types
 class FileInfo(TypedDict):
@@ -110,6 +119,7 @@ class FileInfo(TypedDict):
     created_at: datetime
     modified_at: datetime
 
+
 class FileValidationResult(TypedDict):
     """Result of validating a file."""
     is_valid: bool
@@ -118,6 +128,7 @@ class FileValidationResult(TypedDict):
     size: Optional[int]
     error_message: Optional[str]
     metadata: Optional[Dict[str, Any]]
+
 
 class UploadProgress(TypedDict):
     """Upload progress metadata."""
@@ -129,6 +140,7 @@ class UploadProgress(TypedDict):
     speed_mbps: float
     eta_seconds: Optional[float]
 
+
 # YOLO-related types
 class YOLOAnnotation(TypedDict):
     """Normalized YOLO annotation entry."""
@@ -139,6 +151,7 @@ class YOLOAnnotation(TypedDict):
     height: float
     confidence: Optional[float]
 
+
 class YOLODatasetConfig(TypedDict):
     """YOLO dataset configuration file."""
     train: str
@@ -147,12 +160,14 @@ class YOLODatasetConfig(TypedDict):
     nc: int
     names: List[str]
 
+
 class DatasetValidationResult(TypedDict):
     """Dataset validation result details."""
     is_valid: bool
     errors: List[str]
     warnings: List[str]
     stats: Optional[Dict[str, Any]]
+
 
 class YOLODatasetStats(TypedDict):
     """Dataset statistics summary."""
@@ -161,6 +176,7 @@ class YOLODatasetStats(TypedDict):
     class_distribution: Dict[str, int]
     image_sizes: Dict[str, int]
     avg_objects_per_image: float
+
 
 # Event system types
 class EventData(TypedDict):
@@ -171,14 +187,18 @@ class EventData(TypedDict):
     source: str
     data: Dict[str, Any]
 
+
 class EventHandler(Protocol):
     """Protocol for async event handlers."""
+
     def handle(self, event: EventData) -> Awaitable[None]:
         """Handle an incoming event."""
         ...
 
+
 class EventPublisher(Protocol):
     """Protocol for event publishing components."""
+
     async def publish(self, event: EventData) -> None:
         """Publish a single event."""
         ...
@@ -191,6 +211,7 @@ class EventPublisher(Protocol):
         """Remove subscription for an event type."""
         ...
 
+
 # Monitoring and metrics types
 class MetricData(TypedDict):
     """Generic metric datapoint."""
@@ -199,6 +220,7 @@ class MetricData(TypedDict):
     timestamp: datetime
     tags: Optional[Dict[str, str]]
 
+
 class HealthCheckResult(TypedDict):
     """Health-check structure describing service status."""
     status: Literal['healthy', 'unhealthy', 'degraded']
@@ -206,6 +228,7 @@ class HealthCheckResult(TypedDict):
     timestamp: datetime
     details: Optional[Dict[str, Any]]
     dependencies: Optional[Dict[str, str]]
+
 
 # Configuration management types
 class ConfigurationSchema(TypedDict):
@@ -217,11 +240,13 @@ class ConfigurationSchema(TypedDict):
     description: str
     validation_rules: Optional[Dict[str, Any]]
 
+
 class ConfigurationGroup(TypedDict):
     """Grouping of related configuration entries."""
     name: str
     description: str
     configs: List[ConfigurationSchema]
+
 
 # User and permission types
 class UserInfo(TypedDict):
@@ -234,11 +259,13 @@ class UserInfo(TypedDict):
     created_at: datetime
     last_login: Optional[datetime]
 
+
 class Permission(TypedDict):
     """Permission definition."""
     resource: str
     action: str
     scope: Optional[str]
+
 
 # Batch processing types
 class BatchJob(TypedDict):
@@ -255,8 +282,10 @@ class BatchJob(TypedDict):
     error_message: Optional[str]
     result: Optional[Dict[str, Any]]
 
+
 class BatchJobHandler(Protocol):
     """Protocol for batch job handlers."""
+
     def prepare_job(self, job: BatchJob) -> Awaitable[None]:
         """Prepare a job before execution."""
         ...
@@ -269,6 +298,7 @@ class BatchJobHandler(Protocol):
         """Clean up resources after job completion."""
         ...
 
+
 # Cache-related types
 class CacheEntry(TypedDict):
     """Metadata for cached entries."""
@@ -279,8 +309,10 @@ class CacheEntry(TypedDict):
     access_count: int
     last_accessed: datetime
 
+
 class CacheStrategy(Protocol):
     """Protocol describing cache strategy hooks."""
+
     def get(self, key: str) -> Optional[Any]:
         """Fetch a cached value."""
         ...
@@ -301,6 +333,7 @@ class CacheStrategy(Protocol):
         """Return whether the key exists."""
         ...
 
+
 # Search-related types
 class SearchQuery(TypedDict):
     """Represents a user search query."""
@@ -310,6 +343,7 @@ class SearchQuery(TypedDict):
     page: int
     page_size: int
 
+
 class SearchResult(TypedDict, Generic[ResponseType]):
     """Represents a search result set."""
     items: List[ResponseType]
@@ -318,8 +352,10 @@ class SearchResult(TypedDict, Generic[ResponseType]):
     page_size: int
     took_ms: float
 
+
 class SearchIndex(Protocol):
     """Protocol describing search index operations."""
+
     async def index_document(self, doc_id: str, document: Dict[str, Any]) -> bool:
         """Index or update a document."""
         ...
@@ -336,6 +372,7 @@ class SearchIndex(Protocol):
         """Rebuild the entire index."""
         ...
 
+
 # Notification system types
 class Notification(TypedDict):
     """Notification payload stored for a user."""
@@ -348,8 +385,10 @@ class Notification(TypedDict):
     read_at: Optional[datetime]
     data: Optional[Dict[str, Any]]
 
+
 class NotificationChannel(Protocol):
     """Protocol for notification delivery channels."""
+
     async def send(self, notification: Notification) -> bool:
         """Send a single notification."""
         ...
@@ -357,6 +396,7 @@ class NotificationChannel(Protocol):
     async def send_bulk(self, notifications: List[Notification]) -> Dict[str, List[str]]:
         """Send notifications in bulk."""
         ...
+
 
 # Audit log types
 class AuditLog(TypedDict):
@@ -371,6 +411,7 @@ class AuditLog(TypedDict):
     user_agent: Optional[str]
     timestamp: datetime
 
+
 # Analytics types
 class UsageStatistics(TypedDict):
     """Usage statistic datapoint."""
@@ -379,6 +420,7 @@ class UsageStatistics(TypedDict):
     timestamp: datetime
     dimensions: Optional[Dict[str, str]]
 
+
 class PerformanceMetrics(TypedDict):
     """Performance measurement datapoint."""
     operation: str
@@ -386,6 +428,7 @@ class PerformanceMetrics(TypedDict):
     success: bool
     timestamp: datetime
     details: Optional[Dict[str, Any]]
+
 
 # Error-handling types
 class ErrorContext(TypedDict):
@@ -400,8 +443,10 @@ class ErrorContext(TypedDict):
     user_id: Optional[str]
     details: Optional[Dict[str, Any]]
 
+
 class ErrorRecoveryStrategy(Protocol):
     """Protocol for defining retry/recovery strategies."""
+
     def should_retry(self, error: Exception, attempt: int) -> bool:
         """Return whether we should retry."""
         ...
@@ -414,6 +459,7 @@ class ErrorRecoveryStrategy(Protocol):
         """Handle terminal failure."""
         ...
 
+
 # Version/compatibility types
 class APIVersion(TypedDict):
     """API version metadata."""
@@ -422,12 +468,14 @@ class APIVersion(TypedDict):
     sunset_date: Optional[datetime]
     migration_guide: Optional[str]
 
+
 class CompatibilityMatrix(TypedDict):
     """Compatibility mapping between API and client versions."""
     api_version: str
     client_version: str
     compatible: bool
     features: List[str]
+
 
 # Helper utilities
 def create_success_response(data: ResponseType, message: str = "Success") -> SuccessResponse[ResponseType]:
@@ -438,6 +486,7 @@ def create_success_response(data: ResponseType, message: str = "Success") -> Suc
         "message": message
     }
 
+
 def create_error_response(error_code: str, message: str, details: Optional[Dict[str, Any]] = None) -> ErrorResponse:
     """Create an error response payload."""
     return {
@@ -446,6 +495,7 @@ def create_error_response(error_code: str, message: str, details: Optional[Dict[
         "message": message,
         "details": details
     }
+
 
 def create_pagination_response(
     items: List[ResponseType],

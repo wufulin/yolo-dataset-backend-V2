@@ -62,7 +62,7 @@ class MinioConfig:
     secure: bool = Field(default=False)
 
     # Performance tuning
-    chunk_size: int = Field(default=100 * 1024 * 1024, ge=1024*1024, le=1024*1024*1024)  # 100MB
+    chunk_size: int = Field(default=100 * 1024 * 1024, ge=1024 * 1024, le=1024 * 1024 * 1024)  # 100MB
     max_workers: int = Field(default=20, ge=1, le=100)
     max_retries: int = Field(default=3, ge=0, le=10)
     retry_delay: float = Field(default=1.0, ge=0.1, le=10.0)
@@ -97,8 +97,9 @@ class SecurityConfig:
 class FileConfig:
     """File-storage and processing settings."""
     allowed_image_formats: List[str] = field(default_factory=lambda: ["JPEG", "JPG", "PNG", "BMP", "TIFF"])
-    max_upload_size: int = Field(default=100 * 1024 * 1024 * 1024, ge=1024*1024, le=1024*1024*1024*1024)  # 100 GB
-    upload_chunk_size: int = Field(default=10 * 1024 * 1024, ge=1024*1024, le=1024*1024*1024)  # 10 MB
+    max_upload_size: int = Field(default=100 * 1024 * 1024 * 1024, ge=1024 * 1024,
+                                 le=1024 * 1024 * 1024 * 1024)  # 100 GB
+    upload_chunk_size: int = Field(default=10 * 1024 * 1024, ge=1024 * 1024, le=1024 * 1024 * 1024)  # 10 MB
     temp_dir: str = Field(default="/tmp/yolo_datasets_upload")
 
     # Image processing
@@ -129,7 +130,7 @@ class LoggingConfig:
     level: LogLevel = Field(default=LogLevel.INFO)
     format: str = Field(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     file_path: Optional[str] = Field(default=None)
-    max_file_size: int = Field(default=100 * 1024 * 1024, ge=1024*1024, le=1024*1024*1024)  # 100 MB
+    max_file_size: int = Field(default=100 * 1024 * 1024, ge=1024 * 1024, le=1024 * 1024 * 1024)  # 100 MB
     backup_count: int = Field(default=5, ge=1, le=20)
     enable_console: bool = Field(default=True)
     enable_file: bool = Field(default=False)
@@ -180,7 +181,7 @@ class Settings(BaseSettings):
     minio_secret_key: str = Field(default="minioadmin")
     minio_bucket_name: str = Field(default="yolo-datasets")
     minio_secure: bool = Field(default=False)
-    minio_chunk_size: int = Field(default=100 * 1024 * 1024, ge=1024*1024, le=1024*1024*1024)
+    minio_chunk_size: int = Field(default=100 * 1024 * 1024, ge=1024 * 1024, le=1024 * 1024 * 1024)
     minio_max_workers: int = Field(default=20, ge=1, le=100)
     minio_max_retries: int = Field(default=3, ge=0, le=10)
     minio_retry_delay: float = Field(default=1.0, ge=0.1, le=10.0)
@@ -188,8 +189,8 @@ class Settings(BaseSettings):
 
     # File upload configuration
     allowed_image_formats: List[str] = Field(default=["JPEG", "JPG", "PNG", "BMP", "TIFF"])
-    max_upload_size: int = Field(default=100 * 1024 * 1024 * 1024, ge=1024*1024, le=1024*1024*1024*1024)
-    upload_chunk_size: int = Field(default=10 * 1024 * 1024, ge=1024*1024, le=1024*1024*1024)
+    max_upload_size: int = Field(default=100 * 1024 * 1024 * 1024, ge=1024 * 1024, le=1024 * 1024 * 1024 * 1024)
+    upload_chunk_size: int = Field(default=10 * 1024 * 1024, ge=1024 * 1024, le=1024 * 1024 * 1024)
     temp_dir: str = Field(default="/tmp/yolo_datasets_upload")
 
     # Image processing configuration
@@ -226,7 +227,7 @@ class Settings(BaseSettings):
     log_level: LogLevel = Field(default=LogLevel.INFO)
     log_format: str = Field(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     log_file_path: Optional[str] = Field(default=None)
-    log_max_file_size: int = Field(default=100 * 1024 * 1024, ge=1024*1024, le=1024*1024*1024)
+    log_max_file_size: int = Field(default=100 * 1024 * 1024, ge=1024 * 1024, le=1024 * 1024 * 1024)
     log_backup_count: int = Field(default=5, ge=1, le=20)
     log_enable_console: bool = Field(default=True)
     log_enable_file: bool = Field(default=False)
@@ -498,32 +499,32 @@ class ConfigManager:
 
             # Refresh typed caches where applicable
             if key in ["mongodb_url", "mongo_db_name", "mongodb_max_pool_size",
-                      "mongodb_max_idle_time_ms", "mongodb_server_selection_timeout_ms",
-                      "mongodb_connect_timeout_ms", "mongodb_socket_timeout_ms",
-                      "mongodb_heartbeat_frequency_ms", "mongodb_retry_writes",
-                      "mongodb_wait_queue_multiple", "mongodb_wait_queue_timeout_ms",
-                      "mongodb_batch_size", "mongodb_max_concurrent_operations",
-                      "mongodb_query_timeout_ms", "mongodb_transaction_retry_attempts"]:
+                       "mongodb_max_idle_time_ms", "mongodb_server_selection_timeout_ms",
+                       "mongodb_connect_timeout_ms", "mongodb_socket_timeout_ms",
+                       "mongodb_heartbeat_frequency_ms", "mongodb_retry_writes",
+                       "mongodb_wait_queue_multiple", "mongodb_wait_queue_timeout_ms",
+                       "mongodb_batch_size", "mongodb_max_concurrent_operations",
+                       "mongodb_query_timeout_ms", "mongodb_transaction_retry_attempts"]:
                 self._config_cache["database"] = self.settings.get_database_config()
             elif key in ["minio_endpoint", "minio_access_key", "minio_secret_key",
-                        "minio_bucket_name", "minio_secure", "minio_chunk_size",
-                        "minio_max_workers", "minio_max_retries", "minio_retry_delay",
-                        "minio_connection_pool_size"]:
+                         "minio_bucket_name", "minio_secure", "minio_chunk_size",
+                         "minio_max_workers", "minio_max_retries", "minio_retry_delay",
+                         "minio_connection_pool_size"]:
                 self._config_cache["minio"] = self.settings.get_minio_config()
             elif key in ["redis_url", "redis_host", "redis_port", "redis_db",
-                        "redis_password", "redis_max_connections", "redis_session_ttl",
-                        "redis_session_lock_timeout", "redis_connection_pool_timeout"]:
+                         "redis_password", "redis_max_connections", "redis_session_ttl",
+                         "redis_session_lock_timeout", "redis_connection_pool_timeout"]:
                 self._config_cache["redis"] = self.settings.get_redis_config()
             elif key in ["secret_key", "jwt_algorithm", "jwt_access_token_expire_minutes",
-                        "jwt_refresh_token_expire_days"]:
+                         "jwt_refresh_token_expire_days"]:
                 self._config_cache["security"] = self.settings.get_security_config()
             elif key in ["allowed_image_formats", "max_upload_size", "upload_chunk_size",
-                        "temp_dir", "thumbnail_sizes", "default_thumbnail_quality",
-                        "max_annotations_per_image", "annotation_confidence_threshold",
-                        "yolo_validation_timeout"]:
+                         "temp_dir", "thumbnail_sizes", "default_thumbnail_quality",
+                         "max_annotations_per_image", "annotation_confidence_threshold",
+                         "yolo_validation_timeout"]:
                 self._config_cache["file"] = self.settings.get_file_config()
             elif key in ["log_level", "log_format", "log_file_path", "log_max_file_size",
-                        "log_backup_count", "log_enable_console", "log_enable_file"]:
+                         "log_backup_count", "log_enable_console", "log_enable_file"]:
                 self._config_cache["logging"] = self.settings.get_logging_config()
 
             # Notify observers about the change

@@ -8,9 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from PIL import Image
 from bson import ObjectId
 from fastapi import HTTPException, status
-from PIL import Image
 
 from app.config import settings
 from app.models.dataset import Dataset
@@ -477,7 +477,7 @@ class UploadService:
 
         # Phase 3: Insert successfully uploaded image docs to database
         logger.info(f"\n  Phase 3: Inserting image docs into database...")
-        # upload_files_parallel_async returns "successful_files" (list of result dicts) 
+        # upload_files_parallel_async returns "successful_files" (list of result dicts)
         # instead of "success_list" (list of object names)
         if "success_list" in upload_result:
             successful_paths = set(upload_result["success_list"])

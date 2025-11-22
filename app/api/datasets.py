@@ -1,6 +1,6 @@
 """Dataset management API endpoints."""
-from datetime import datetime
 import logging
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -78,7 +78,9 @@ async def create_dataset(
             )
 
         # Convert Dataset object to dict and ensure _id is present
-        dataset_dict = created_dataset.model_dump(by_alias=True) if hasattr(created_dataset, 'model_dump') else created_dataset.dict(by_alias=True)
+        dataset_dict = created_dataset.model_dump(by_alias=True) if hasattr(created_dataset,
+                                                                            'model_dump') else created_dataset.dict(
+            by_alias=True)
         # Ensure _id is present for DatasetResponse (field name is 'id', alias is '_id')
         if '_id' not in dataset_dict or dataset_dict['_id'] is None:
             # Try to get id from the dataset object, or use the dataset_id parameter
@@ -88,7 +90,7 @@ async def create_dataset(
                 dataset_dict['_id'] = dataset_id
         else:
             dataset_dict['_id'] = str(dataset_dict['_id'])
-        
+
         logger.info(f"Dataset '{dataset_data.name}' created successfully with ID: {dataset_id}")
         return DatasetResponse(**dataset_dict)
     except HTTPException:
@@ -127,7 +129,8 @@ async def list_datasets(
         # Convert Dataset objects to dicts with _id
         items = []
         for dataset in result['items']:
-            dataset_dict = dataset.model_dump(by_alias=True) if hasattr(dataset, 'model_dump') else dataset.dict(by_alias=True)
+            dataset_dict = dataset.model_dump(by_alias=True) if hasattr(dataset, 'model_dump') else dataset.dict(
+                by_alias=True)
             # Ensure _id is present (it should be there from by_alias=True, but check just in case)
             if '_id' not in dataset_dict or dataset_dict['_id'] is None:
                 # Try to get id from the dataset object (field name is 'id', alias is '_id')
@@ -177,7 +180,8 @@ async def get_dataset(
             )
 
         # Convert Dataset object to dict and ensure _id is present
-        dataset_dict = dataset.model_dump(by_alias=True) if hasattr(dataset, 'model_dump') else dataset.dict(by_alias=True)
+        dataset_dict = dataset.model_dump(by_alias=True) if hasattr(dataset, 'model_dump') else dataset.dict(
+            by_alias=True)
         # Ensure _id is present for DatasetResponse (field name is 'id', alias is '_id')
         if '_id' not in dataset_dict or dataset_dict['_id'] is None:
             # Try to get id from the dataset object, or use the dataset_id parameter
@@ -187,7 +191,7 @@ async def get_dataset(
                 dataset_dict['_id'] = dataset_id
         else:
             dataset_dict['_id'] = str(dataset_dict['_id'])
-        
+
         logger.info(f"Retrieved dataset: {dataset.name} (ID: {dataset_id})")
         return DatasetResponse(**dataset_dict)
     except HTTPException:

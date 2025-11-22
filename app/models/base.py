@@ -252,4 +252,3 @@ class ModelFactory:
         """Instantiate a registered model."""
         model_class = cls.get_model(model_name)
         return model_class(**kwargs)
-

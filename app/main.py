@@ -35,7 +35,7 @@ logger: logging.Logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> Any:
     """Application lifecycle management
-    
+
     Handles startup and shutdown logic for the FastAPI application,
     including external service connections (e.g., Redis).
     """
@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI) -> Any:
 
 def create_application() -> FastAPI:
     """Create and configure FastAPI application instance
-    
+
     Configures CORS, exception handlers, routes, and other core settings.
     Returns a fully initialized FastAPI app.
     """
@@ -191,7 +191,7 @@ def _register_exception_handlers(app: FastAPI) -> None:
     @performance_monitor("global_exception_handler")
     async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         """Global exception handler for uncaught exceptions
-        
+
         Provides consistent error formatting and logs detailed exception info
         for debugging purposes.
         """
@@ -251,24 +251,24 @@ def _register_routes(app: FastAPI) -> None:
 
 def _map_error_category_to_status_code(category: ErrorCategory) -> int:
     """Map custom error categories to standard HTTP status codes
-    
+
     Args:
         category: ErrorCategory enum value
-        
+
     Returns:
         Corresponding HTTP status code
     """
     status_code_mapping: Dict[ErrorCategory, int] = {
-        ErrorCategory.AUTHENTICATION: 401,    # Unauthorized
-        ErrorCategory.AUTHORIZATION: 403,     # Forbidden
-        ErrorCategory.VALIDATION: 422,        # Unprocessable Entity
-        ErrorCategory.BUSINESS_LOGIC: 400,    # Bad Request
-        ErrorCategory.DATABASE: 500,          # Internal Server Error
-        ErrorCategory.STORAGE: 500,           # Internal Server Error
-        ErrorCategory.NETWORK: 503,           # Service Unavailable
-        ErrorCategory.FILE_SYSTEM: 500,       # Internal Server Error
+        ErrorCategory.AUTHENTICATION: 401,  # Unauthorized
+        ErrorCategory.AUTHORIZATION: 403,  # Forbidden
+        ErrorCategory.VALIDATION: 422,  # Unprocessable Entity
+        ErrorCategory.BUSINESS_LOGIC: 400,  # Bad Request
+        ErrorCategory.DATABASE: 500,  # Internal Server Error
+        ErrorCategory.STORAGE: 500,  # Internal Server Error
+        ErrorCategory.NETWORK: 503,  # Service Unavailable
+        ErrorCategory.FILE_SYSTEM: 500,  # Internal Server Error
         ErrorCategory.EXTERNAL_SERVICE: 502,  # Bad Gateway
-        ErrorCategory.SYSTEM: 500             # Internal Server Error
+        ErrorCategory.SYSTEM: 500  # Internal Server Error
     }
     return status_code_mapping.get(category, 500)  # Default to 500
 

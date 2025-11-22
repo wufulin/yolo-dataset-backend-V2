@@ -17,7 +17,6 @@ from app.core.exceptions import (
     StorageException,
     ValidationException,
 )
-
 # from app.core.decorators import performance_monitor, cache_result, exception_handler  # Avoid circular import
 from app.utils.logger import get_logger
 
@@ -100,7 +99,7 @@ class FileProcessor:
 
     @staticmethod
     def get_file_info(file_path: Union[str, Path], include_hash: bool = False,
-                     hash_algorithm: str = "md5") -> FileInfo:
+                      hash_algorithm: str = "md5") -> FileInfo:
         """
         Get detailed file information
 
@@ -196,9 +195,9 @@ class FileProcessor:
 
     @staticmethod
     def list_files(directory: Union[str, Path],
-                  pattern: Optional[str] = None,
-                  recursive: bool = False,
-                  include_hidden: bool = False) -> Iterator[FileInfo]:
+                   pattern: Optional[str] = None,
+                   recursive: bool = False,
+                   include_hidden: bool = False) -> Iterator[FileInfo]:
         """
         List files in directory
 
@@ -236,7 +235,7 @@ class FileProcessor:
                 pattern_parts = pattern_str.split('*')
                 if len(pattern_parts) == 2:
                     return (pattern_parts[0] in name or not pattern_parts[0]) and \
-                           (pattern_parts[1] in name or not pattern_parts[1])
+                        (pattern_parts[1] in name or not pattern_parts[1])
 
             return pattern_str in name
 
@@ -271,9 +270,9 @@ class ArchiveProcessor:
 
     @staticmethod
     def extract_zip_safe(zip_path: Union[str, Path],
-                        extract_dir: Union[str, Path],
-                        root_folder_name: Optional[str] = None,
-                        skip_hidden: bool = True) -> ArchiveExtractionResult:
+                         extract_dir: Union[str, Path],
+                         root_folder_name: Optional[str] = None,
+                         skip_hidden: bool = True) -> ArchiveExtractionResult:
         """
         Safely extract ZIP file, skip specified root directory
 
@@ -395,7 +394,8 @@ class ArchiveProcessor:
                     "total_size": total_size,
                     "total_size_mb": round(total_size / 1024 / 1024, 2),
                     "compressed_size": zip_path.stat().st_size,
-                    "compression_ratio": round((1 - zip_path.stat().st_size / total_size) * 100, 2) if total_size > 0 else 0,
+                    "compression_ratio": round((1 - zip_path.stat().st_size / total_size) * 100,
+                                               2) if total_size > 0 else 0,
                     "files": file_list[:20],  # First 20 files
                     "has_root_folder": ArchiveProcessor._has_single_root_folder(file_list)
                 }

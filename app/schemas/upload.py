@@ -17,4 +17,3 @@ class UploadComplete(BaseModel):
     """Schema for upload completion."""
     filename: str = Field(..., description="Original filename")
     dataset_info: Optional[DatasetCreate] = Field(None, description="Dataset information")
-

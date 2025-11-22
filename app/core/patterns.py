@@ -31,6 +31,7 @@ ServiceType = TypeVar('ServiceType')
 @runtime_checkable
 class ServiceFactory(Protocol):
     """Protocol for service factories."""
+
     def create_service(self, service_type: str, **kwargs) -> Any:
         """Create a service instance."""
         ...
@@ -311,6 +312,7 @@ class Observable:
 
     def _sync_to_async(self, func, *args):
         """Helper to run sync callbacks in the background."""
+
         def wrapper():
             return func(*args)
 
@@ -451,4 +453,3 @@ class UploadProgressTracker(Observable):
     def get_active_uploads(self) -> List[UploadEvent]:
         """Return active uploads as a list of events."""
         return list(self._active_uploads.values())
-

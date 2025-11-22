@@ -23,6 +23,7 @@ T = TypeVar('T')
 @runtime_checkable
 class ServiceProtocol(Protocol):
     """Base protocol shared by all services."""
+
     def initialize(self, **kwargs) -> None:
         """Initialize service resources."""
         ...

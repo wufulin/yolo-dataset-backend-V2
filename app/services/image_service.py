@@ -89,7 +89,7 @@ class ImageService:
         return prepared_images
 
     async def async_bulk_save_images(self, image_list: List[Dict[str, Any]],
-                                   batch_size: Optional[int] = None) -> Dict[str, Any]:
+                                     batch_size: Optional[int] = None) -> Dict[str, Any]:
         """
         High-performance async bulk save images with optimized batching.
 
@@ -142,9 +142,9 @@ class ImageService:
             }
 
     async def async_bulk_save_images_with_annotations(self,
-                                                    image_list: List[Dict[str, Any]],
-                                                    annotations_by_image: Dict[str, List[Dict[str, Any]]] = None,
-                                                    batch_size: Optional[int] = None) -> Dict[str, Any]:
+                                                      image_list: List[Dict[str, Any]],
+                                                      annotations_by_image: Dict[str, List[Dict[str, Any]]] = None,
+                                                      batch_size: Optional[int] = None) -> Dict[str, Any]:
         """
         Bulk save images with their annotations in a transaction.
 
@@ -196,7 +196,8 @@ class ImageService:
 
                 total_time = time.time() - start_time
 
-                logger.info(f"Transaction completed: {image_result['inserted']} images, {annotations_inserted} annotations in {total_time:.2f}s")
+                logger.info(
+                    f"Transaction completed: {image_result['inserted']} images, {annotations_inserted} annotations in {total_time:.2f}s")
 
                 return {
                     **image_result,
@@ -209,11 +210,11 @@ class ImageService:
             raise
 
     async def async_get_images_by_dataset(self,
-                                        dataset_id: str,
-                                        skip: int = 0,
-                                        limit: int = 100,
-                                        split: Optional[str] = None,
-                                        projection: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                                          dataset_id: str,
+                                          skip: int = 0,
+                                          limit: int = 100,
+                                          split: Optional[str] = None,
+                                          projection: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """
         Async version of get_images_by_dataset with performance optimization.
 
@@ -444,7 +445,8 @@ class ImageService:
             total_time = time.time() - start_time
             throughput = total_inserted / total_time if total_time > 0 else 0
 
-            logger.info(f"Bulk insert completed: {total_inserted} inserted, {total_errors} errors in {total_time:.2f}s (throughput: {throughput:.2f}/s)")
+            logger.info(
+                f"Bulk insert completed: {total_inserted} inserted, {total_errors} errors in {total_time:.2f}s (throughput: {throughput:.2f}/s)")
             return total_inserted
 
         except Exception as e:
@@ -618,7 +620,8 @@ class ImageService:
             annotations_deleted = self.annotations.delete_many({"dataset_id": dataset_object_id}).deleted_count
 
             total_time = time.time() - start_time
-            logger.info(f"Deleted {images_deleted} images and {annotations_deleted} annotations from dataset {dataset_id} in {total_time:.2f}s")
+            logger.info(
+                f"Deleted {images_deleted} images and {annotations_deleted} annotations from dataset {dataset_id} in {total_time:.2f}s")
 
             return images_deleted
 
@@ -701,4 +704,3 @@ class ImageService:
 
 # Global Image service instance
 image_service = ImageService()
-

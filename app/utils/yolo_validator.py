@@ -23,22 +23,20 @@ from app.core.exceptions import (
     YOLODatasetTypeException,
     YOLOValidationException,
 )
-
 # from app.core.decorators import exception_handler, performance_monitor, cache_result, async_exception_handler  # Avoid circular import
 from app.utils.file_utils import resolve_target_directory
 from app.utils.logger import get_logger
-
 
 logger: logging.Logger = get_logger(__name__)
 
 
 class DatasetType(Enum):
     """Dataset type enumeration for YOLO formats."""
-    DETECT = "detect"    # Object detection
+    DETECT = "detect"  # Object detection
     SEGMENT = "segment"  # Instance segmentation
-    POSE = "pose"        # Pose estimation
-    OBB = "obb"          # Oriented bounding box
-    CLASSIFY = "classify"# Image classification
+    POSE = "pose"  # Pose estimation
+    OBB = "obb"  # Oriented bounding box
+    CLASSIFY = "classify"  # Image classification
 
 
 @dataclass
@@ -65,14 +63,14 @@ class ValidationResult:
 class AnnotationInfo:
     """Container for structured annotation metadata."""
     annotation_type: str  # e.g., "detect", "segment", "pose"
-    class_id: int         # Class index from dataset YAML
-    class_name: str       # Class name corresponding to class_id
+    class_id: int  # Class index from dataset YAML
+    class_name: str  # Class name corresponding to class_id
     bbox: Optional[Dict[str, float]] = None  # Bounding box (for detect/obb)
-    points: Optional[List[float]] = None     # Polygon points (for segment)
+    points: Optional[List[float]] = None  # Polygon points (for segment)
     keypoints: Optional[List[float]] = None  # Keypoint coordinates (for pose)
-    confidence: Optional[float] = None       # Confidence score (if available)
-    area: Optional[float] = None             # Bounding box/segment area
-    metadata: Dict[str, Any] = None          # Additional annotation metadata
+    confidence: Optional[float] = None  # Confidence score (if available)
+    area: Optional[float] = None  # Bounding box/segment area
+    metadata: Dict[str, Any] = None  # Additional annotation metadata
 
     def __post_init__(self):
         """Initialize optional metadata field if not provided."""
@@ -87,11 +85,11 @@ class YOLOAnnotationParser(ABC):
     async def parse(self, annotation_path: str, class_names: List[str]) -> List[AnnotationInfo]:
         """
         Parse annotation file into structured AnnotationInfo objects.
-        
+
         Args:
             annotation_path: Path to the annotation TXT file
             class_names: List of class names from dataset YAML
-            
+
         Returns:
             List of structured AnnotationInfo objects
         """
@@ -320,7 +318,7 @@ class YOLOValidator:
         """Initialize validator with registry of dataset-specific parsers."""
         # Get supported dataset types from DatasetType enum
         self.supported_types = [t.value for t in DatasetType]
-        
+
         # Register annotation parsers (key: dataset type, value: parser instance)
         self._parsers: Dict[str, YOLOAnnotationParser] = {
             DatasetType.DETECT.value: DetectAnnotationParser(),
@@ -333,14 +331,14 @@ class YOLOValidator:
     async def validate_dataset(self, dataset_path: str, dataset_type: str) -> ValidationResult:
         """
         Validate YOLO dataset format and structure.
-        
+
         Args:
             dataset_path: Path to the root directory of the dataset
             dataset_type: Type of dataset to validate (must be in supported_types)
-            
+
         Returns:
             ValidationResult object containing validation outcome and metadata
-            
+
         Raises:
             YOLODatasetTypeException: If dataset_type is unsupported
             FileNotFoundException: If dataset_path does not exist
@@ -394,7 +392,7 @@ class YOLOValidator:
             # Determine overall validation status
             is_valid = len(all_errors) == 0
             status_message = "Dataset validation completed successfully" if is_valid else "Dataset validation failed"
-            
+
             return ValidationResult(
                 is_valid=is_valid,
                 message=status_message,
@@ -413,17 +411,17 @@ class YOLOValidator:
     async def _validate_from_ultralytics_lib(self, dataset_path: Path, dataset_type: str) -> ValidationResult:
         """
         Validate dataset using Ultralytics Hub's built-in dataset checker.
-        
+
         Args:
             dataset_path: Path to dataset root
             dataset_type: Type of dataset to validate
-            
+
         Returns:
             ValidationResult with outcome from Ultralytics checker
         """
         # Lazy import to avoid dependency if not using this validation method
         from ultralytics.hub import check_dataset
-            
+
         # Run Ultralytics dataset check
         check_result = check_dataset(str(dataset_path), dataset_type)
 
@@ -443,11 +441,11 @@ class YOLOValidator:
         # Resolve dataset root directory and parse YAML for class information
         dataset_root = resolve_target_directory(str(dataset_path))
         logger.info(f"Resolved dataset root directory: {dataset_root}")
-        
+
         # Find and parse dataset YAML file
         dataset_yaml_path = self.find_dataset_yaml(str(dataset_root))
         yaml_data = self.parse_dataset_yaml(str(dataset_yaml_path))
-        
+
         # Extract sorted class names from YAML
         class_names = [yaml_data['names'][i] for i in sorted(yaml_data['names'].keys())]
 
@@ -471,11 +469,11 @@ class YOLOValidator:
     async def _validate_directory_structure(self, dataset_path: Path, dataset_type: str) -> ValidationResult:
         """
         Validate dataset directory structure matches YOLO specifications.
-        
+
         Args:
             dataset_path: Path to dataset root
             dataset_type: Type of dataset (affects required directories)
-            
+
         Returns:
             ValidationResult with structure validation outcome
         """
@@ -517,12 +515,12 @@ class YOLOValidator:
     async def _validate_yaml_file(self, dataset_path: Path) -> ValidationResult:
         """
         Validate dataset YAML configuration file (required for YOLO datasets).
-        
+
         Checks for mandatory fields and validates referenced paths.
-        
+
         Args:
             dataset_path: Path to dataset root
-            
+
         Returns:
             ValidationResult with YAML validation outcome
         """
@@ -562,7 +560,7 @@ class YOLOValidator:
                 train_path = dataset_path / config["train"]
                 if not train_path.exists():
                     errors.append(f"Training data path not found: {config['train']} (referenced in YAML)")
-            
+
             if "val" in config:
                 val_path = dataset_path / config["val"]
                 if not val_path.exists():
@@ -595,11 +593,11 @@ class YOLOValidator:
     async def _validate_annotations(self, dataset_path: Path, dataset_type: str) -> ValidationResult:
         """
         Validate annotation files (format, structure, and basic integrity).
-        
+
         Args:
             dataset_path: Path to dataset root
             dataset_type: Type of dataset (affects annotation format checks)
-            
+
         Returns:
             ValidationResult with annotation validation outcome
         """
@@ -611,7 +609,8 @@ class YOLOValidator:
         annotation_files = list(dataset_path.rglob("*.txt"))
 
         if not annotation_files:
-            warnings.append("No annotation files found in dataset (normal for classification if using folder structure)")
+            warnings.append(
+                "No annotation files found in dataset (normal for classification if using folder structure)")
             return ValidationResult(
                 is_valid=True,
                 message="Annotation validation completed (no files found)",
@@ -669,11 +668,11 @@ class YOLOValidator:
     async def _validate_images(self, dataset_path: Path, dataset_type: str) -> ValidationResult:
         """
         Validate image files (presence, format, and basic statistics).
-        
+
         Args:
             dataset_path: Path to dataset root
             dataset_type: Type of dataset (not used for basic image checks)
-            
+
         Returns:
             ValidationResult with image validation outcome and statistics
         """
@@ -712,9 +711,11 @@ class YOLOValidator:
         large_images = [f for f in image_files if f.stat().st_size > large_image_threshold]
 
         if small_images:
-            warnings.append(f"Found {len(small_images)} unusually small images (size < {small_image_threshold/1024:.0f}KB)")
+            warnings.append(
+                f"Found {len(small_images)} unusually small images (size < {small_image_threshold / 1024:.0f}KB)")
         if large_images:
-            warnings.append(f"Found {len(large_images)} unusually large images (size > {large_image_threshold/1024/1024:.0f}MB)")
+            warnings.append(
+                f"Found {len(large_images)} unusually large images (size > {large_image_threshold / 1024 / 1024:.0f}MB)")
 
         # Update image statistics in dataset info
         dataset_info["image_stats"] = {
@@ -752,13 +753,13 @@ class YOLOValidator:
     def find_dataset_yaml(self, directory: str) -> Path:
         """
         Locate the dataset YAML configuration file in a directory.
-        
+
         Args:
             directory: Path to directory to search for YAML file
-            
+
         Returns:
             Path to the first found YAML file
-            
+
         Raises:
             FileNotFoundException: If directory does not exist
             YOLOValidationException: If no YAML file is found
@@ -783,13 +784,13 @@ class YOLOValidator:
     def parse_dataset_yaml(self, yaml_path: str) -> Dict[str, Any]:
         """
         Parse dataset YAML configuration file into a dictionary.
-        
+
         Args:
             yaml_path: Path to the dataset YAML file
-            
+
         Returns:
             Parsed YAML data as a dictionary
-            
+
         Raises:
             FileNotFoundException: If YAML file does not exist
             YOLOValidationException: If parsing fails
@@ -817,20 +818,20 @@ class YOLOValidator:
     def get_dataset_type(self, dataset_path: str) -> str:
         """
         Detect dataset type automatically based on directory structure and content.
-        
+
         Uses heuristic checks to identify:
         - OBB: Presence of OBB-related directory/filename patterns
         - Classify: Presence of classification-related patterns
         - Segment: Presence of segmentation directories (segments/masks)
         - Pose: Presence of pose-related patterns
         - Detect: Default if no other type is detected
-        
+
         Args:
             dataset_path: Path to dataset root
-            
+
         Returns:
             Detected dataset type (one of supported_types)
-            
+
         Raises:
             FileNotFoundException: If dataset path does not exist
         """
@@ -862,10 +863,10 @@ class YOLOValidator:
     def _has_classify_annotations(self, dataset_path: str) -> bool:
         """
         Heuristic check for classification dataset: presence of classification-related patterns.
-        
+
         Args:
             dataset_path: Path to dataset root
-            
+
         Returns:
             True if classification dataset is suspected, False otherwise
         """
@@ -885,10 +886,10 @@ class YOLOValidator:
     def _has_obb_annotations(self, dataset_path: str) -> bool:
         """
         Heuristic check for OBB dataset: presence of OBB-related patterns.
-        
+
         Args:
             dataset_path: Path to dataset root
-            
+
         Returns:
             True if OBB dataset is suspected, False otherwise
         """
@@ -908,10 +909,10 @@ class YOLOValidator:
     def _has_segmentation_annotations(self, dataset_path: str) -> bool:
         """
         Heuristic check for segmentation dataset: presence of segmentation directories.
-        
+
         Args:
             dataset_path: Path to dataset root
-            
+
         Returns:
             True if segmentation dataset is suspected, False otherwise
         """
@@ -931,10 +932,10 @@ class YOLOValidator:
     def _has_pose_annotations(self, dataset_path: str) -> bool:
         """
         Heuristic check for pose dataset: presence of pose-related patterns.
-        
+
         Args:
             dataset_path: Path to dataset root
-            
+
         Returns:
             True if pose dataset is suspected, False otherwise
         """
@@ -952,18 +953,18 @@ class YOLOValidator:
         return False
 
     async def parse_annotations(self, annotation_path: str, dataset_type: str,
-                              class_names: List[str]) -> List[AnnotationInfo]:
+                                class_names: List[str]) -> List[AnnotationInfo]:
         """
         Parse annotation file using the appropriate dataset-specific parser.
-        
+
         Args:
             annotation_path: Path to annotation TXT file
             dataset_type: Type of dataset (determines parser to use)
             class_names: List of class names from dataset YAML
-            
+
         Returns:
             List of structured AnnotationInfo objects
-            
+
         Raises:
             YOLODatasetTypeException: If dataset_type is unsupported
             Exception: If parsing fails

@@ -25,6 +25,7 @@ DatabaseModelType = TypeVar('DatabaseModelType')
 
 class QueryFilter(Protocol):
     """Protocol for objects that can be converted to query dictionaries."""
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert filter to dictionary representation."""
         ...

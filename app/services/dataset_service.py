@@ -1,8 +1,8 @@
 """Service layer for handling dataset operations with structured patterns and error handling."""
 import asyncio
+import logging
 from datetime import datetime
 from enum import Enum
-import logging
 from typing import (
     Any,
     Dict,
@@ -58,10 +58,15 @@ class DatasetRepository(Protocol):
     """Protocol describing the repository contract for datasets."""
 
     async def create(self, dataset: Dataset) -> str: ...
+
     async def get_by_id(self, dataset_id: str) -> Optional[Dataset]: ...
+
     async def list(self, filters: DatasetFilter, skip: int, limit: int) -> List[Dataset]: ...
+
     async def update(self, dataset_id: str, updates: Dict[str, Any]) -> bool: ...
+
     async def delete(self, dataset_id: str) -> bool: ...
+
     async def count(self, filters: DatasetFilter) -> int: ...
 
 

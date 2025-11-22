@@ -11,7 +11,6 @@ from minio.error import S3Error
 
 from app.config import settings
 from app.utils.logger import get_logger
-
 from .async_minio_client import AsyncMinioClient, UploadProgress
 
 logger: logging.Logger = get_logger(__name__)
@@ -87,7 +86,7 @@ class MinioService:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         file_size = os.path.getsize(file_path)
-        logger.info(f"Async upload started: {object_name} ({file_size / (1024**3):.2f} GB)")
+        logger.info(f"Async upload started: {object_name} ({file_size / (1024 ** 3):.2f} GB)")
 
         async with AsyncMinioClient(
             endpoint=settings.minio_endpoint,
@@ -115,7 +114,7 @@ class MinioService:
             if result["success"]:
                 logger.info(
                     f"Async upload completed: {object_name} - "
-                    f"{result['uploaded_bytes'] / (1024**3):.2f} GB in "
+                    f"{result['uploaded_bytes'] / (1024 ** 3):.2f} GB in "
                     f"{result['upload_time']:.2f}s "
                     f"({result['speed_mbps']:.2f} MB/s)"
                 )
