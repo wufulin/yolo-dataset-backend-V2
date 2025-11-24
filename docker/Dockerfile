@@ -13,12 +13,10 @@ RUN pip install --no-cache-dir --upgrade pip -i https://pypi.tuna.tsinghua.edu.c
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install --no-cache-dir opencv-python-headless==4.12.0.88
 
 # Copy application code
 COPY app/ ./app/
-
-# Create temporary directory
-RUN mkdir -p /tmp/yolo_uploads
 
 # Expose port
 EXPOSE 8000

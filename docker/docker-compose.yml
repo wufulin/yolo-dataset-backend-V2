@@ -28,6 +28,20 @@ services:
     networks:
       - my-network
 
+  yolo-dataset-frontend:
+    image: franklin888/yolo-frontend:latest
+    container_name: yolo-dataset-frontend
+    restart: unless-stopped
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+      - NEXT_PUBLIC_MINIO_ENDPOINT=http://localhost:9000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - yolo-dataset-backend
+    networks:
+      - my-network
+
   # FastAPI
   yolo-dataset-backend:
     image: franklin888/yolo-backend:latest
@@ -37,6 +51,7 @@ services:
       - SECRET_KEY="/1p$zPmWl<9;)_mAxY<)Vm#vTQ83)1<gm38JIW/++CkguhYSBWJjMCEycaWm0MYh"
       - MONGODB_URL=mongodb://admin:admin123456@mongodb:27017/yolo_datasets?authSource=admin
       - MONGO_DB_NAME=yolo_datasets
+      - TEMP_DIR=/tmp/yolo_uploads
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_DB=0

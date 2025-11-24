@@ -520,7 +520,6 @@ class ImageService:
             if split:
                 query["split"] = split
 
-            start_time = time.time()
             cursor = self.images.find(query).skip(skip).limit(limit).sort("created_at", -1)
 
             images = []
@@ -534,11 +533,6 @@ class ImageService:
                 # Convert other ObjectIds
                 self.db.convert_objectids_to_str(image)
                 images.append(image)
-
-            query_time = time.time() - start_time
-
-            if query_time > 1.0:
-                logger.warning(f"Slow query detected: {query_time:.2f}s for dataset {dataset_id}")
 
             return images
 
