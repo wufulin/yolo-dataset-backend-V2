@@ -29,7 +29,7 @@ services:
       - my-network
 
   yolo-dataset-frontend:
-    image: franklin888/yolo-frontend:latest
+    image: franklin888/yolo-frontend:dev
     container_name: yolo-dataset-frontend
     restart: unless-stopped
     environment:
