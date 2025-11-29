@@ -9,6 +9,7 @@ import bson
 from bson import ObjectId
 from pymongo.errors import BulkWriteError, DuplicateKeyError
 
+from app.config import settings
 from app.services.db_service import db_service
 from app.utils.logger import get_logger
 
@@ -104,20 +105,20 @@ class ImageService:
             logger.warning("Empty image list provided for async bulk save")
             return {'inserted': 0, 'errors': 0, 'time': 0.0, 'throughput': 0.0}
 
-        batch_size = batch_size or self.default_batch_size
+        batch_size = batch_size or settings.mongodb_batch_size
         start_time = time.time()
 
         try:
             # Prepare and validate images
-            prepared_images = self._prepare_images_for_insert(image_list)
-            total_images = len(prepared_images)
+            # prepared_images = self._prepare_images_for_insert(image_list)
+            total_images = len(image_list)
 
             logger.info(f"Starting async bulk insert of {total_images} images with batch size {batch_size}")
 
             # Use the optimized bulk insert from database service
             result = await self.db.bulk_insert_optimized(
                 self.async_images,
-                prepared_images,
+                image_list,
                 batch_size=batch_size,
                 ordered=False  # Better performance for large inserts
             )

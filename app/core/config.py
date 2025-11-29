@@ -170,7 +170,7 @@ class Settings(BaseSettings):
     mongodb_wait_queue_timeout_ms: int = Field(default=30000, ge=1000, le=300000)
 
     # MongoDB performance config
-    mongodb_batch_size: int = Field(default=1000, ge=1, le=10000)
+    mongodb_batch_size: int = Field(default=5000, ge=1, le=10000)
     mongodb_max_concurrent_operations: int = Field(default=10, ge=1, le=50)
     mongodb_query_timeout_ms: int = Field(default=30000, ge=1000, le=300000)
     mongodb_transaction_retry_attempts: int = Field(default=3, ge=1, le=10)

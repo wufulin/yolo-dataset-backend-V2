@@ -162,7 +162,7 @@ class MinioService:
         if not valid_files:
             raise ValueError("No valid files found")
 
-        logger.info(f"Starting async parallel upload of {len(valid_files)} files")
+        logger.info(f"Starting async parallel upload of {len(valid_files)} image files")
 
         async with AsyncMinioClient(
             endpoint=settings.minio_endpoint,
