@@ -33,6 +33,11 @@ class DatasetResponse(BaseModel):
     num_images: int = Field(..., description="Number of images")
     num_annotations: int = Field(..., description="Total annotations")
     splits: Dict[str, int] = Field(..., description="Split counts")
+    status: str = Field(..., description="Dataset status")
+    error_message: Optional[str] = Field(None, description="Error message if status is error")
+    file_size: int = Field(..., description="File size in bytes")
+    created_by: str = Field(..., description="User who created the dataset")
+    version: int = Field(..., description="Dataset version")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Update timestamp")
 

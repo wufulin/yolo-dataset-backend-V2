@@ -1,5 +1,4 @@
 """Service layer for handling dataset operations with structured patterns and error handling."""
-import asyncio
 import logging
 from datetime import datetime
 from enum import Enum
@@ -245,9 +244,6 @@ class DatasetService:
 
         # Persist dataset metadata
         dataset_id = await self.repository.create(dataset)
-
-        # Trigger asynchronous validation
-        asyncio.create_task(self._validate_dataset_async(dataset_id, dataset))
 
         return dataset_id
 
